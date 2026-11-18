@@ -277,8 +277,8 @@ function eventsOn(dk,withPre){
       case 'rem':if(remOn(r,dk))out.push({k:'rem',id,ic:lblOf(r.label)[1],c:MOD.rem.c,t:r.title,time:r.time,s:freqTxt(r)});break;
       case 'person':{const b=bdayOn(r,dk);if(b)out.push({k:'person',id,ic:'🎂',c:MOD.people.c,t:'Sinh nhật '+r.name,s:b});
         break}
-      case 'gio':if(lunarMatch(dk,+r.ld,+r.lm))out.push({k:'gio',id,ic:'🕯️',c:MOD.gio.c,t:'Giỗ '+gioName(r),s:gioSub(r,dk)});
-        else if(withPre)for(const n of [7,1])if(lunarMatch(addDays(dk,n),+r.ld,+r.lm))out.push({k:'gio',id,ic:'🕯️',c:MOD.gio.c,t:(n===1?'Ngày mai giỗ ':'Còn 7 ngày đến giỗ ')+gioName(r),s:gioSub(r,addDays(dk,n)),pre:1});break;
+      case 'gio':if(lunarMatch(dk,+r.ld,+r.lm))out.push({k:'gio',id,ic:'🕯️',c:MOD.gio.c,t:gioT(r),s:gioSub(r,dk)});
+        else if(withPre)for(const n of [7,1])if(lunarMatch(addDays(dk,n),+r.ld,+r.lm))out.push({k:'gio',id,ic:'🕯️',c:MOD.gio.c,t:(n===1?'Ngày mai: ':'Còn 7 ngày: ')+gioT(r),s:gioSub(r,addDays(dk,n)),pre:1});break;
       case 'sub':if(r.on!==false){const n=subNext(r,dk);
         if(n===dk)out.push({k:'sub',id,ic:'💳',c:MOD.sub.c,t:'Gia hạn '+r.name,s:fmt(r.price)});
         else if(withPre&&+r.pre>0&&n===addDays(dk,+r.pre))out.push({k:'sub',id,ic:'💳',c:MOD.sub.c,t:`Còn ${r.pre} ngày gia hạn ${r.name}`,s:fmt(r.price)+' · '+fmtDM(n),pre:1})}break;
@@ -289,7 +289,7 @@ function eventsOn(dk,withPre){
   if(S.moon){const l=lunarOf(dk);if(l.d===1||l.d===15)out.push({k:'moon',id:'m',ic:l.d===15?'🌕':'🌑',c:'#b08a2e',t:`${l.d===15?'Rằm':'Mùng 1'} tháng ${l.m}${l.leap?' nhuận':''}`,s:'Âm lịch'})}
   out.forEach(e=>e.key=`${e.k}:${e.id}:${e.g?'g':''}${e.pre?'p':''}:${dk}`);
   return out.sort((a,b)=>(a.time||'99').localeCompare(b.time||'99'))}
-const gioName=r=>(r.rel&&!r.name.toLowerCase().startsWith(r.rel.toLowerCase())?r.rel+' ':'')+r.name;
+const gioName=r=>r.name,gioT=r=>/giỗ/i.test(r.name)?r.name:'Giỗ '+r.name;
 function gioNth(r,dk){const y=+r.year;if(!y)return '';const n=lunarOf(dk).y-y;return n===1?'Giỗ đầu':n===2?'Giỗ hết':n>2?`Giỗ lần thứ ${n}`:''}
 const gioSub=(r,dk)=>[`${r.ld}/${r.lm} âm lịch`,gioNth(r,dk),r.place?'tại '+r.place:''].filter(Boolean).join(' · ');
 const gioNext=(r,from)=>nextOf(k=>lunarMatch(k,+r.ld,+r.lm),from||today(),400);
@@ -591,7 +591,7 @@ const FORMS={
     {n:'bmode',t:'chips',l:'Sinh nhật',o:[['none','Không rõ'],['solar','Dương lịch'],['lunar','Âm lịch']]},
     ...(v.bmode==='solar'?[{n:'bday',t:'date',l:'Ngày sinh'}]:v.bmode==='lunar'?[{n:'bld',t:'sel',l:'Ngày âm',o:range(1,30)},{n:'blm',t:'sel',l:'Tháng âm',o:range(1,12)},{n:'byear',t:'num',l:'Năm sinh (không bắt buộc)'}]:[]),
     {n:'note',t:'area',l:'Ghi chú (sở thích, món thích ăn, size áo…)'}]},
-  gio:{t:'Ngày giỗ',f:v=>[{n:'rel',t:'chips',l:'Vai vế',o:GREL.map(x=>[x,x])},{n:'name',t:'text',l:'Tên người mất',req:1,ph:'VD: Nguyễn Văn A, nội, ngoại…'},
+  gio:{t:'Ngày giỗ',f:v=>[{n:'name',t:'text',l:'Tên ngày giỗ',req:1,ph:'VD: Ông nội, Bà ngoại, Tộc giỗ thu…'},
     {n:'ld',t:'sel',l:'Ngày âm lịch',o:range(1,30)},{n:'lm',t:'sel',l:'Tháng âm lịch',o:range(1,12)},
     {n:'year',t:'num',l:'Năm mất – âm lịch (không bắt buộc, để biết giỗ lần thứ mấy)'},
     {n:'place',t:'text',l:'Làm giỗ tại',ph:'VD: Nhà thờ họ, nhà bác Hai…'},{n:'note',t:'area',l:'Ghi chú (món cúng, người cần mời…)'},
@@ -781,7 +781,7 @@ function makeAllIcs(){
     if(p.bmode==='lunar')lunarDates(+p.bld,+p.blm,10).forEach(k=>{icsEv(L,{uid:id+'-sn-'+k,date:k,title:`🎂 Sinh nhật ${p.name} (${p.bld}/${p.blm} âm)`,alarms:['PT0S','P1D']});n++});
   }
   for(const id of recs('gio')){const g=R[id];
-    lunarDates(+g.ld,+g.lm,10).forEach(k=>{icsEv(L,{uid:id+'-'+k,date:k,title:`🕯️ Giỗ ${gioName(g)} (${g.ld}/${g.lm} âm)`,desc:[gioNth(g,k),g.place?'Tại '+g.place:'',g.note].filter(Boolean).join('\n'),alarms:['PT0S','P1D','P7D']});n++})}
+    lunarDates(+g.ld,+g.lm,10).forEach(k=>{icsEv(L,{uid:id+'-'+k,date:k,title:`🕯️ ${gioT(g)} (${g.ld}/${g.lm} âm)`,desc:[gioNth(g,k),g.place?'Tại '+g.place:'',g.note].filter(Boolean).join('\n'),alarms:['PT0S','P1D','P7D']});n++})}
   for(const id of recs('sub')){const s=R[id];if(s.on===false||!s.start)continue;
     icsEv(L,{uid:id,date:s.start,title:`💳 Gia hạn ${s.name} · ${fmt(s.price)}`,desc:s.note,rrule:'FREQ='+(s.cycle==='year'?'YEARLY':'MONTHLY'),alarms:+s.pre>0?['PT0S','P'+s.pre+'D']:['PT0S']});n++}
   for(const id of recs('vault')){const v=R[id];if(v.exp&&v.exp>=t){icsEv(L,{uid:id,date:v.exp,title:'⏳ Hết hạn: '+v.title,alarms:['PT0S','P7D','P30D']});n++}}
