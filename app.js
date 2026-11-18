@@ -648,6 +648,7 @@ function mPlan(){
   h+=`<div class="box"><div class="bh"><b>📊 Ngân sách tháng ${+mk.slice(5)}</b><small>${buds.length?fmtS(buds.reduce((a,b)=>a+catSpent(mk,b.cat),0))+' / '+fmtS(buds.reduce((a,b)=>a+(+b.amount),0)):''}</small></div>
     ${buds.map(b=>{const C=catOf('out',b.cat),s=catSpent(mk,b.cat),p=s/(+b.amount);return `<button class="cbar" data-edit="bud:ebud${b.cat}"><span>${C[1]} ${C[2]}</span><div class="bar ${budCls(p)}"><i style="width:${Math.min(100,p*100)}%"></i></div><b>${fmtS(s)}/${fmtS(b.amount)}</b></button>`}).join('')||'<div class="note">Đặt mức chi tối đa mỗi tháng cho từng danh mục, app sẽ báo khi dùng tới 80% và khi vượt.</div>'}
     <button class="btn ghost sm" data-act="bud-new">＋ Đặt ngân sách</button></div>`;
+  h+=subPlanHtml(12,true);
   const gl=goalW();
   h+=`<div class="box"><div class="bh"><b>🎯 Quỹ & mục tiêu</b><small>${gl.length?fmtS(sumW(B,gl)):''}</small></div>
     ${gl.map(i=>{const r=R[i],v=B[i]||0,tg=+r.target||0;return `<div class="pp"><i>🎯</i><button class="tt" data-edit="wallet:${i}"><b>${esc(r.name)}</b><small>${fmt(v)}${tg?` / ${fmtS(tg)} · ${Math.round(v/tg*100)}%`:''}${+r.pct>0?` · tự gợi ý ${r.pct}% mỗi khoản thu`:''}</small>${tg?`<div class="bar"><i style="width:${Math.max(0,Math.min(100,v/tg*100))}%"></i></div>`:''}</button><button class="ppok" data-fund="${i}">＋ Góp</button></div>`}).join('')||'<div class="note">Tạo “Quỹ dự phòng” để để riêng một phần mỗi khi nhận hoa hồng — tháng không có thu vẫn đủ chi. Hoặc mục tiêu như “Đặt cọc căn hộ 200tr”.</div>'}
@@ -675,10 +676,23 @@ function mReport(){
   return h}
 
 /* ---------- GÓI ĐĂNG KÝ ---------- */
+// dự tính chi gói đăng ký theo từng tháng (tính đúng ngày gia hạn thật, không chia trung bình)
+function subPlan(months=12){const t=today(),mk0=t.slice(0,7),end=mkAdd(mk0,months),M=[];
+  for(let j=0;j<months;j++)M.push({k:mkAdd(mk0,j),sum:0,it:[]});
+  for(const i of recs('sub')){const r=R[i];if(r.on===false||!r.start||!(+r.price>0))continue;let k=subNext(r,t),g=0;
+    while(k&&k.slice(0,7)<end&&g++<400){const m=M.find(x=>x.k===k.slice(0,7));if(m){m.sum+=+r.price;m.it.push({i,n:r.name,k,p:+r.price,paid:!!(r.pd&&r.pd[k]&&r.pd[k]!=='skip')})}k=subNext(r,addDays(k,1))}}
+  return M}
+function subPlanHtml(months=12,compact){const M=subPlan(months),tot=M.reduce((a,m)=>a+m.sum,0),mx=Math.max(1,...M.map(m=>m.sum));
+  if(!tot)return '';
+  return `<div class="box"><div class="bh"><b>${compact?'💳 Gói đăng ký':'📅 Dự tính chi'} · ${months} tháng tới</b><small><b>${fmtS(tot)}</b></small></div>
+    ${M.map(m=>`<details class="spm"${m.sum&&!compact&&m===M.find(x=>x.sum)?' open':''}><summary class="cbar"><span>T${+m.k.slice(5)}/${m.k.slice(2,4)}</span><div class="bar"><i style="width:${m.sum/mx*100}%"></i></div><b>${m.sum?fmtS(m.sum):'—'}</b></summary>
+      ${m.it.sort((a,b)=>a.k.localeCompare(b.k)).map(x=>`<button class="fcrow" data-edit="sub:${x.i}"><i>💳</i><div><b>${esc(x.n)}</b><small>${fmtDMY(x.k)}${x.paid?' · ✓ đã trả':''}</small></div><b class="red">−${fmtS(x.p)}</b></button>`).join('')}</details>`).join('')}
+    ${compact?`<button class="btn ghost sm" data-go="sub">Xem gói đăng ký ›</button>`:''}</div>`}
 function renderSub(){
   const t=today(),L=recs('sub').map(i=>({i,r:R[i],n:R[i].on===false?null:subNext(R[i],t)})).sort((a,b)=>(a.n||'9').localeCompare(b.n||'9'));
   const act=L.filter(x=>x.n),mon=act.reduce((a,x)=>a+subMonthly(x.r),0);
   $('#v-sub').innerHTML=`<div class="msum two"><div><small>Mỗi tháng (ước tính)</small><b>${fmt(mon)}</b></div><div><small>Mỗi năm</small><b>${fmt(mon*12)}</b></div></div>
+    ${subPlanHtml(12)}${L.length?'<div class="month">Các gói</div>':''}
     ${L.map(({i,r,n})=>`<button class="ev" data-edit="sub:${i}"><i style="background:${MOD.sub.c}">${esc((r.name||'?')[0].toUpperCase())}</i><div><b>${esc(r.name)}</b><small>${fmt(r.price)} / ${r.cycle==='year'?'năm':'tháng'}</small><small class="${n&&diffDays(t,n)<=(+r.pre||0)?'red':''}">${n?'Gia hạn: '+(n===t?'Hôm nay':relDay(n)):'Đã ngừng'}</small></div></button>`).join('')||
     `<div class="empty"><div class="big">💳</div>Chưa có gói nào.<br>Thêm iCloud, Netflix, Google One, tên miền, bảo hiểm… để được nhắc trước ngày gia hạn.</div>`}`}
 
