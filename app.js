@@ -183,11 +183,17 @@ function lock(){
   $('#eTitle').value=$('#eBody').value='';$('#lightImg').removeAttribute('src');
   SHEETS.forEach(s=>$(s).classList.add('hidden'));
   $('#app').classList.add('hidden');$('#lock').classList.remove('hidden');lockUI();$('#pw1').focus()}
-let idle;
-function bump(){clearTimeout(idle);if(S.lock>0&&!$('#app').classList.contains('hidden'))idle=setTimeout(lock,S.lock*60000)}
+let idle,lastAct=Date.now();
+const unlocked=()=>!$('#app').classList.contains('hidden');
+function bump(){lastAct=Date.now();clearTimeout(idle);if(S.lock>0&&unlocked())idle=setTimeout(lock,S.lock*60000)}
 ['click','keydown','touchstart','scroll'].forEach(e=>addEventListener(e,bump,true));
 let picking=false;
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&!picking&&S.lock>0&&hasPw()&&!$('#app').classList.contains('hidden'))lock()});
+// Chuyển app khác không khoá ngay; chỉ khoá khi tổng thời gian không thao tác (kể cả lúc ở app khác) ≥ thời gian cài đặt
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden||!unlocked()||S.lock<=0||!hasPw())return;
+  if(picking){bump();return}
+  const left=S.lock*60000-(Date.now()-lastAct);
+  clearTimeout(idle);if(left<=0)lock();else idle=setTimeout(lock,left)});
 
 /* ---------- lưu & nạp ---------- */
 let saveQ=Promise.resolve();
