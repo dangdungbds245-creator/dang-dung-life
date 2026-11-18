@@ -248,6 +248,7 @@ function remOn(r,dk){
     case 'month':return d.getDate()===Math.min(a.getDate(),dim(d));
     case 'year':return a.getMonth()===d.getMonth()&&d.getDate()===Math.min(a.getDate(),dim(d))}
   return false}
+const remPres=r=>[...(r.pre7&&(r.freq==='month'||r.freq==='year')?[7]:[]),...(r.pre1&&r.freq!=='day'?[1]:[])];
 function freqTxt(r){
   const t=r.time?' · '+r.time:'';
   switch(r.freq){
@@ -274,7 +275,8 @@ function eventsOn(dk,withPre){
   const out=[];
   for(const id in R){const r=R[id];
     switch(r.k){
-      case 'rem':if(remOn(r,dk))out.push({k:'rem',id,ic:lblOf(r.label)[1],c:MOD.rem.c,t:r.title,time:r.time,s:freqTxt(r)});break;
+      case 'rem':if(remOn(r,dk))out.push({k:'rem',id,ic:lblOf(r.label)[1],c:MOD.rem.c,t:r.title,time:r.time,s:freqTxt(r)});
+        else if(withPre)for(const n of remPres(r))if(remOn(r,addDays(dk,n)))out.push({k:'rem',id,ic:lblOf(r.label)[1],c:MOD.rem.c,t:(n===1?'Ngày mai: ':'Còn 1 tuần: ')+r.title,time:r.time,s:freqTxt(r),pre:1});break;
       case 'person':{const b=bdayOn(r,dk);if(b)out.push({k:'person',id,ic:'🎂',c:MOD.people.c,t:'Sinh nhật '+r.name,s:b});
         break}
       case 'gio':if(lunarMatch(dk,+r.ld,+r.lm))out.push({k:'gio',id,ic:'🕯️',c:MOD.gio.c,t:gioT(r),s:gioSub(r,dk)});
@@ -567,7 +569,7 @@ function menuAct(a,dk){
 
 /* ---------- BIỂU MẪU CHUNG ---------- */
 const DEF={task:()=>({title:'',due:'',time:'',star:false,note:'',done:false}),
-  rem:()=>({title:'',freq:'month',lunar:false,ld:'1',lm:'1',date:today(),time:'08:00',label:'personal',on:true,note:''}),
+  rem:()=>({title:'',freq:'month',pre7:false,pre1:false,lunar:false,ld:'1',lm:'1',date:today(),time:'08:00',label:'personal',on:true,note:''}),
   person:()=>({name:'',rel:'',phone:'',bmode:'none',bday:'',bld:'1',blm:'1',byear:'',note:''}),
   gio:()=>({name:'',rel:'',ld:'1',lm:'1',year:'',place:'',note:''}),
   tx:()=>({type:'out',amount:0,cat:'food',who:'',paid:false,date:today(),note:''}),
@@ -584,9 +586,11 @@ const FORMS={
     ...(lun?[v.freq==='year'?{t:'lunar',l:'Ngày âm lịch',d:'ld',m:'lm'}:{n:'ld',t:'sel',l:'Ngày âm lịch',o:range(1,30)}]
       :[{n:'date',t:'date',l:v.freq==='once'?'Ngày':'Bắt đầu từ ngày',req:1}]),
     {n:'time',t:'time',l:'Giờ nhắc'},
+    ...(v.freq==='month'||v.freq==='year'?[{n:'pre7',t:'switch',l:'🔔 Báo trước 1 tuần'}]:[]),
+    ...(v.freq!=='day'?[{n:'pre1',t:'switch',l:'🔔 Báo trước 1 ngày'}]:[]),
     {n:'label',t:'chips',l:'Nhãn',o:LBL.map(x=>[x[0],x[1]+' '+x[2]])},
     {n:'on',t:'switch',l:'Đang bật'},{n:'note',t:'area',l:'Ghi chú'},
-    {t:'hint',h:v=>{const n=nextOf(k=>remOn(Object.assign({},v,{on:true}),k),today(),400);return n?`🔔 Lần nhắc tiếp theo: <b>${relDay(n)==='Hôm nay'?'Hôm nay':DOWL[parse(n).getDay()]+', '+fmtDMY(n)}</b>${v.time?' lúc '+v.time:''} (âm lịch ${lunarTxt(n)})`:'Không có lần nhắc nào sắp tới'}}]}},
+    {t:'hint',h:v=>{const n=nextOf(k=>remOn(Object.assign({},v,{on:true}),k),today(),400),pr=remPres(v);return n?`🔔 Lần nhắc tiếp theo: <b>${relDay(n)==='Hôm nay'?'Hôm nay':DOWL[parse(n).getDay()]+', '+fmtDMY(n)}</b>${v.time?' lúc '+v.time:''} (âm lịch ${lunarTxt(n)})${pr.length?'<br>Báo trước: '+pr.map(d=>`${d===7?'1 tuần':'1 ngày'} (${fmtDM(addDays(n,-d))})`).join(', '):''}`:'Không có lần nhắc nào sắp tới'}}]}},
   person:{t:'Người thân',f:v=>[{n:'name',t:'text',l:'Họ tên',req:1},{n:'rel',t:'chips',l:'Quan hệ',o:REL.map(x=>[x,x])},{n:'phone',t:'tel',l:'Số điện thoại'},
     {n:'bmode',t:'chips',l:'Sinh nhật',o:[['none','Không rõ'],['solar','Dương lịch'],['lunar','Âm lịch']]},
     ...(v.bmode==='solar'?[{n:'bday',t:'date',l:'Ngày sinh'}]:v.bmode==='lunar'?[{t:'lunar',l:'Sinh nhật (âm lịch)',d:'bld',m:'blm'},{n:'byear',t:'num',l:'Năm sinh (không bắt buộc)'}]:[]),
@@ -772,7 +776,7 @@ function lunarMonthly(ld,months){const out=[];let k=today();for(let i=0;i<months
 function download(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click()}
 function makeAllIcs(){
   const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//DangDungLife//VI','X-WR-CALNAME:Đăng Dũng Life'],t=today();let n=0;
-  for(const id of recs('rem')){const r=R[id];if(r.on===false)continue;const base={title:`${lblOf(r.label)[1]} ${r.title}`,desc:r.note,time:r.time};
+  for(const id of recs('rem')){const r=R[id];if(r.on===false)continue;const base={title:`${lblOf(r.label)[1]} ${r.title}`,desc:r.note,time:r.time,alarms:['PT0S',...remPres(r).map(d=>'P'+d+'D')]};
     if(r.lunar&&r.freq==='year')lunarDates(+r.ld,+r.lm,10).forEach(k=>{icsEv(L,{...base,uid:id+'-'+k,date:k});n++});
     else if(r.lunar&&r.freq==='month')lunarMonthly(+r.ld,36).forEach(k=>{icsEv(L,{...base,uid:id+'-'+k,date:k});n++});
     else if(r.freq==='once'){if(r.date>=t){icsEv(L,{...base,uid:id,date:r.date});n++}}
