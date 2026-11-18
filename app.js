@@ -581,7 +581,7 @@ const FORMS={
     {n:'title',t:'text',l:'Việc gì lặp lại',req:1,ph:'VD: Đóng tiền điện, uống thuốc, đi chùa ngày rằm…'},
     {n:'freq',t:'chips',l:'Tần suất',o:FREQ},
     ...(v.freq==='month'||v.freq==='year'?[{n:'lunar',t:'switch',l:'🌙 Theo âm lịch'}]:[]),
-    ...(lun?[{n:'ld',t:'sel',l:'Ngày âm lịch',o:range(1,30)},...(v.freq==='year'?[{n:'lm',t:'sel',l:'Tháng âm lịch',o:range(1,12)}]:[])]
+    ...(lun?[v.freq==='year'?{t:'lunar',l:'Ngày âm lịch',d:'ld',m:'lm'}:{n:'ld',t:'sel',l:'Ngày âm lịch',o:range(1,30)}]
       :[{n:'date',t:'date',l:v.freq==='once'?'Ngày':'Bắt đầu từ ngày',req:1}]),
     {n:'time',t:'time',l:'Giờ nhắc'},
     {n:'label',t:'chips',l:'Nhãn',o:LBL.map(x=>[x[0],x[1]+' '+x[2]])},
@@ -589,10 +589,10 @@ const FORMS={
     {t:'hint',h:v=>{const n=nextOf(k=>remOn(Object.assign({},v,{on:true}),k),today(),400);return n?`🔔 Lần nhắc tiếp theo: <b>${relDay(n)==='Hôm nay'?'Hôm nay':DOWL[parse(n).getDay()]+', '+fmtDMY(n)}</b>${v.time?' lúc '+v.time:''} (âm lịch ${lunarTxt(n)})`:'Không có lần nhắc nào sắp tới'}}]}},
   person:{t:'Người thân',f:v=>[{n:'name',t:'text',l:'Họ tên',req:1},{n:'rel',t:'chips',l:'Quan hệ',o:REL.map(x=>[x,x])},{n:'phone',t:'tel',l:'Số điện thoại'},
     {n:'bmode',t:'chips',l:'Sinh nhật',o:[['none','Không rõ'],['solar','Dương lịch'],['lunar','Âm lịch']]},
-    ...(v.bmode==='solar'?[{n:'bday',t:'date',l:'Ngày sinh'}]:v.bmode==='lunar'?[{n:'bld',t:'sel',l:'Ngày âm',o:range(1,30)},{n:'blm',t:'sel',l:'Tháng âm',o:range(1,12)},{n:'byear',t:'num',l:'Năm sinh (không bắt buộc)'}]:[]),
+    ...(v.bmode==='solar'?[{n:'bday',t:'date',l:'Ngày sinh'}]:v.bmode==='lunar'?[{t:'lunar',l:'Sinh nhật (âm lịch)',d:'bld',m:'blm'},{n:'byear',t:'num',l:'Năm sinh (không bắt buộc)'}]:[]),
     {n:'note',t:'area',l:'Ghi chú (sở thích, món thích ăn, size áo…)'}]},
   gio:{t:'Ngày giỗ',f:v=>[{n:'name',t:'text',l:'Tên ngày giỗ',req:1,ph:'VD: Ông nội, Bà ngoại, Tộc giỗ thu…'},
-    {n:'ld',t:'sel',l:'Ngày âm lịch',o:range(1,30)},{n:'lm',t:'sel',l:'Tháng âm lịch',o:range(1,12)},
+    {t:'lunar',l:'Ngày giỗ (âm lịch)',d:'ld',m:'lm'},
     {n:'year',t:'num',l:'Năm mất – âm lịch (không bắt buộc, để biết giỗ lần thứ mấy)'},
     {n:'place',t:'text',l:'Làm giỗ tại',ph:'VD: Nhà thờ họ, nhà bác Hai…'},{n:'note',t:'area',l:'Ghi chú (món cúng, người cần mời…)'},
     {t:'hint',h:v=>{const n=gioNext(v);return n?`🕯️ Giỗ tới: <b>${DOWL[parse(n).getDay()]}, ${fmtDMY(n)}</b> (${relDay(n)})<br>🔔 Nhắc trước 7 ngày (${fmtDM(addDays(n,-7))}), trước 1 ngày (${fmtDM(addDays(n,-1))}) và đúng ngày, lặp lại hằng năm theo âm lịch.`:''}}]},
@@ -627,6 +627,8 @@ function fieldHtml(f,v){
     case 'money':return lab+`<input data-n="${f.n}" data-money="1" type="text" inputmode="decimal" value="${val?fmtN(val):''}" placeholder="VD: 50000, 50k, 1,5tr" autocomplete="off"><div class="fh" data-mh="${f.n}">${val?'= '+fmt(val):'Gõ tắt được: 50k = 50.000đ, 2tr = 2.000.000đ'}</div>`;
     case 'chips':return lab+`<div class="fchips">${f.o.map(o=>`<button class="chip${String(val)===String(o[0])?' on':''}" data-chip="${f.n}" data-v="${esc(o[0])}">${esc(o[1])}</button>`).join('')}</div>`;
     case 'switch':return `<div class="row"><div>${esc(f.l)}</div><input type="checkbox" class="sw" data-n="${f.n}"${val?' checked':''}></div>`;
+    case 'lunar':{const sel=(n,mx)=>`<select data-n="${n}">${range(1,mx).map(o=>`<option value="${o[0]}"${String(v[n])===String(o[0])?' selected':''}>${o[1]}</option>`).join('')}</select>`;
+      return lab+`<div class="lunpick"><span>Ngày</span>${sel(f.d,30)}<span>tháng</span>${sel(f.m,12)}</div>`}
     case 'sel':return lab+`<select data-n="${f.n}">${f.o.map(o=>`<option value="${o[0]}"${String(val)===String(o[0])?' selected':''}>${o[1]}</option>`).join('')}</select>`;
     case 'photos':return lab+`<div class="photos" id="fPh">${(val||[]).map(id=>`<div class="ph1"><img data-p="${id}" alt=""><button data-fx="${id}">✕</button></div>`).join('')}</div><button class="btn ghost" data-act="fphoto">📷 Thêm ảnh</button>`;
     case 'hint':return `<div class="fhint">${f.h(v)}</div>`}
