@@ -39,19 +39,21 @@ const MOD={
   task:{n:'Việc cần làm',s:'Việc',i:'✅',c:'#2f6fd6'},
   rem:{n:'Nhắc nhở',i:'🔔',c:'#d9534f'},
   people:{n:'Người thân',i:'👨‍👩‍👧',c:'#8e5bd6'},
+  gio:{n:'Ngày giỗ',s:'Giỗ',i:'🕯️',c:'#8a7552'},
   money:{n:'Tài chính',i:'💰',c:'#2e9e6a'},
   sub:{n:'Gói đăng ký',s:'Gói ĐK',i:'💳',c:'#0f9fb0'},
   habit:{n:'Thói quen',i:'🌱',c:'#5aa02c'},
   vault:{n:'Kho cá nhân',s:'Kho',i:'🗂️',c:'#6b6f7a'},
   more:{n:'Thêm',i:'☰'},
   set:{n:'Cài đặt',i:'⚙️'}};
-const TABBABLE=['cal','diary','task','rem','people','money','sub','habit','vault'];
+const TABBABLE=['cal','diary','task','rem','people','gio','money','sub','habit','vault'];
 const LBL=[['personal','👤','Cá nhân'],['family','🏠','Gia đình'],['work','💼','Công việc'],['health','💊','Sức khoẻ'],['money','💵','Tài chính'],['bday','🎂','Sinh nhật'],['other','📌','Khác']];
 const FREQ=[['once','Một lần'],['day','Hằng ngày'],['week','Hằng tuần'],['month','Hằng tháng'],['year','Hằng năm']];
 const CAT_OUT=[['food','🍜','Ăn uống'],['move','⛽','Đi lại'],['home','🏠','Nhà cửa'],['bill','🧾','Hoá đơn'],['shop','🛍️','Mua sắm'],['health','💊','Sức khoẻ'],['family','👨‍👩‍👧','Gia đình'],['edu','📚','Học tập'],['fun','🎉','Giải trí'],['gift','🎁','Hiếu hỉ'],['work','💼','Công việc'],['other','📦','Khác']];
 const CAT_IN=[['salary','💼','Lương'],['comm','🤝','Hoa hồng'],['bonus','🎁','Thưởng'],['invest','📈','Đầu tư'],['rent','🏠','Cho thuê'],['other','💵','Khác']];
 const TXT=[['out','Chi'],['in','Thu'],['lend','Cho vay'],['borrow','Đi vay']];
 const VCAT=[['doc','🪪','Giấy tờ'],['warranty','🧾','Bảo hành'],['acct','🏦','Tài khoản'],['card','💳','Thẻ'],['health','💊','Sức khoẻ'],['other','📁','Khác']];
+const GREL=['Cụ','Ông','Bà','Bố','Mẹ','Bác','Chú','Cô','Dì','Cậu','Anh','Chị','Em','Con','Họ hàng','Khác'];
 const REL=['Bố','Mẹ','Vợ','Con','Anh','Chị','Em','Ông','Bà','Họ hàng','Bạn','Đồng nghiệp','Đối tác','Khác'];
 const HICONS=['💧','🏃','📖','🧘','🙏','📞','🥗','😴','💪','🚶','✍️','🌅','🚭','💊','🎯','🧹'];
 const HSUG=[['💧','Uống 8 ly nước'],['🏃','Tập thể dục 30 phút'],['📖','Đọc sách 10 trang'],['🧘','Thiền 10 phút'],['📞','Gọi điện cho bố mẹ'],['🚶','Đi bộ 5.000 bước'],['😴','Ngủ trước 23 giờ']];
@@ -206,9 +208,15 @@ async function loadData(){
   const raw=get(K.data,{}),wasEnc=!!(raw&&raw.enc);
   const obj=wasEnc?JSON.parse(await dec(raw)):(raw||{});
   if(obj&&obj.v>=2){R=obj.entries||{};tombs=obj.tombs||{}}else{R=obj||{};tombs={}}
-  R=migrate(R);
+  R=migrate(R);migGio();
   if(KEY&&!wasEnc&&Object.keys(R).length){await save();
     for(const e of Object.values(R))for(const id of e.photos||[]){const r=await pRaw(id);if(typeof r==='string')await pPut(id,r)}}}
+function migGio(){let ch=false;
+  for(const id of recs('person')){const p=R[id];if(!('gio' in p))continue;
+    const gid='eg'+id.slice(1,40);
+    if(p.gio&&!R[gid]&&!tombs[gid])R[gid]={k:'gio',name:p.name,rel:'',ld:p.gld||'1',lm:p.glm||'1',year:'',place:'',note:'',at:Date.now()};
+    delete p.gio;delete p.gld;delete p.glm;p.at=Date.now();ch=true}
+  if(ch)save();return ch}
 const putRec=(id,r)=>{R[id]=Object.assign(r,{at:Date.now()});delete tombs[id];save()};
 const delRec=id=>{if(!R[id])return;dropPhotos(R[id].photos);delete R[id];tombs[id]=Date.now();save()};
 function applyTheme(){
@@ -262,7 +270,9 @@ function eventsOn(dk,withPre){
     switch(r.k){
       case 'rem':if(remOn(r,dk))out.push({k:'rem',id,ic:lblOf(r.label)[1],c:MOD.rem.c,t:r.title,time:r.time,s:freqTxt(r)});break;
       case 'person':{const b=bdayOn(r,dk);if(b)out.push({k:'person',id,ic:'🎂',c:MOD.people.c,t:'Sinh nhật '+r.name,s:b});
-        if(r.gio&&lunarMatch(dk,+r.gld,+r.glm))out.push({k:'person',id,ic:'🕯️',c:'#8a7552',t:'Giỗ '+r.name,s:`${r.gld}/${r.glm} âm lịch`,g:1});break}
+        break}
+      case 'gio':if(lunarMatch(dk,+r.ld,+r.lm))out.push({k:'gio',id,ic:'🕯️',c:MOD.gio.c,t:'Giỗ '+gioName(r),s:gioSub(r,dk)});
+        else if(withPre)for(const n of [7,1])if(lunarMatch(addDays(dk,n),+r.ld,+r.lm))out.push({k:'gio',id,ic:'🕯️',c:MOD.gio.c,t:(n===1?'Ngày mai giỗ ':'Còn 7 ngày đến giỗ ')+gioName(r),s:gioSub(r,addDays(dk,n)),pre:1});break;
       case 'sub':if(r.on!==false){const n=subNext(r,dk);
         if(n===dk)out.push({k:'sub',id,ic:'💳',c:MOD.sub.c,t:'Gia hạn '+r.name,s:fmt(r.price)});
         else if(withPre&&+r.pre>0&&n===addDays(dk,+r.pre))out.push({k:'sub',id,ic:'💳',c:MOD.sub.c,t:`Còn ${r.pre} ngày gia hạn ${r.name}`,s:fmt(r.price)+' · '+fmtDM(n),pre:1})}break;
@@ -273,6 +283,10 @@ function eventsOn(dk,withPre){
   if(S.moon){const l=lunarOf(dk);if(l.d===1||l.d===15)out.push({k:'moon',id:'m',ic:l.d===15?'🌕':'🌑',c:'#b08a2e',t:`${l.d===15?'Rằm':'Mùng 1'} tháng ${l.m}${l.leap?' nhuận':''}`,s:'Âm lịch'})}
   out.forEach(e=>e.key=`${e.k}:${e.id}:${e.g?'g':''}${e.pre?'p':''}:${dk}`);
   return out.sort((a,b)=>(a.time||'99').localeCompare(b.time||'99'))}
+const gioName=r=>(r.rel&&!r.name.toLowerCase().startsWith(r.rel.toLowerCase())?r.rel+' ':'')+r.name;
+function gioNth(r,dk){const y=+r.year;if(!y)return '';const n=lunarOf(dk).y-y;return n===1?'Giỗ đầu':n===2?'Giỗ hết':n>2?`Giỗ lần thứ ${n}`:''}
+const gioSub=(r,dk)=>[`${r.ld}/${r.lm} âm lịch`,gioNth(r,dk),r.place?'tại '+r.place:''].filter(Boolean).join(' · ');
+const gioNext=(r,from)=>nextOf(k=>lunarMatch(k,+r.ld,+r.lm),from||today(),400);
 function nextOf(test,from,max=400){for(let i=0;i<=max;i++){const k=addDays(from,i);if(test(k))return k}return null}
 const evRow=(e,dk)=>`<button class="ev" data-edit="${e.k}:${e.id}"><i style="background:${e.c}">${e.ic}</i><div><b>${esc(e.t)}</b><small>${[dk?relDay(dk):'',e.k==='rem'?(e.time||''):e.s].filter(Boolean).map(esc).join(' · ')}</small></div></button>`;
 function relDay(dk){const n=diffDays(today(),dk);if(n===0)return 'Hôm nay';if(n===1)return 'Ngày mai';if(n===2)return 'Ngày kia';if(n===-1)return 'Hôm qua';
@@ -285,7 +299,7 @@ function drawNav(){
   const tabs=['home',...S.tabs,'more'];
   $('#navIn').innerHTML=tabs.map(t=>`<button data-v="${t}" class="${view===t||(t==='more'&&!tabs.includes(view))?'on':''}"><i>${MOD[t].i}</i>${MOD[t].s||MOD[t].n}</button>`).join('')}
 const FAB={diary:()=>openEntry(null,today()),cal:()=>openMenu(selDay),home:()=>openMenu(today()),task:()=>openForm('task',null,{due:taskSeg==='today'?today():taskSeg==='up'?addDays(today(),1):''}),
-  rem:()=>openForm('rem'),people:()=>openForm('person'),money:()=>openForm('tx',null,moneyTab==='loan'?{type:'lend'}:{}),sub:()=>openForm('sub'),habit:()=>openForm('habit'),vault:()=>openForm('vault')};
+  rem:()=>openForm('rem'),people:()=>openForm('person'),gio:()=>openForm('gio'),money:()=>openForm('tx',null,moneyTab==='loan'?{type:'lend'}:{}),sub:()=>openForm('sub'),habit:()=>openForm('habit'),vault:()=>openForm('vault')};
 function go(v){view=v;render();$('main').scrollTop=0}
 function render(){
   syncLastW();
@@ -299,7 +313,7 @@ function render(){
   $$('main .view').forEach(v=>v.classList.toggle('on',v.id==='v-'+view));
   drawNav();
   $('#fab').classList.toggle('hidden',!FAB[view]);
-  const fn={home:renderHome,cal:renderCal,diary:renderDiary,task:renderTask,rem:renderRem,people:renderPeople,money:renderMoney,sub:renderSub,habit:renderHabit,vault:renderVault,more:renderMore}[view];
+  const fn={home:renderHome,cal:renderCal,diary:renderDiary,task:renderTask,rem:renderRem,people:renderPeople,gio:renderGio,money:renderMoney,sub:renderSub,habit:renderHabit,vault:renderVault,more:renderMore}[view];
   if(fn)fn()}
 
 /* ---------- HÔM NAY ---------- */
@@ -341,7 +355,7 @@ function renderHome(){
       tile('habit',habs.length?`<small>Hôm nay ${hd}/${habs.length}</small><div class="bar"><i style="width:${habs.length?hd/habs.length*100:0}%"></i></div>`:'<small>Bắt đầu một thói quen nhỏ</small>')+
       tile('sub',subs.length?`<small>≈ ${fmtS(sm)}/tháng</small><small>${nx?`${esc(nx[1].name)} · ${fmtDM(nx[0])}`:''}</small>`:'<small>Theo dõi khoản gia hạn</small>')+
       tile('people',(()=>{const ps=recs('person').map(i=>[nextOf(k=>!!bdayOn(R[i],k),t,370),R[i]]).filter(x=>x[0]).sort((a,b)=>a[0].localeCompare(b[0]))[0];
-        return ps?`<small>🎂 ${esc(ps[1].name)}</small><small>${relDay(ps[0])}</small>`:'<small>Sinh nhật, ngày giỗ</small>'})())+
+        return ps?`<small>🎂 ${esc(ps[1].name)}</small><small>${relDay(ps[0])}</small>`:'<small>Sinh nhật</small>'})())+
       `</div>`}
   if(S.home.mem){
     const md=t.slice(4),mem=diaryIds().filter(i=>R[i].date.endsWith(md)&&R[i].date<t).slice(0,3);
@@ -438,21 +452,31 @@ function renderRem(){
   $('#v-rem').innerHTML=`<div class="chips">${[['all','Tất cả'],...LBL.map(x=>[x[0],x[1]+' '+x[2]])].map(([k,l])=>`<button class="chip${remLbl===k?' on':''}" data-lbl="${k}">${l}</button>`).join('')}</div>
     ${on.length?`<div class="month">Sắp tới</div>${on.map(row).join('')}`:''}
     ${off.length?`<div class="month">Đã qua / đang tắt</div>${off.map(row).join('')}`:''}
-    ${!all.length?`<div class="empty"><div class="big">🔔</div>Chưa có lời nhắc nào.<br>Bấm ＋ để thêm: đóng tiền điện, giỗ, rằm, uống thuốc…</div>`:''}
+    ${!all.length?`<div class="empty"><div class="big">🔔</div>Chưa có lời nhắc nào.<br>Bấm ＋ để thêm: đóng tiền điện, rằm, uống thuốc…</div>`:''}
     <div class="note" style="margin-top:12px">Thông báo hiện khi app đang mở. Để chắc chắn được nhắc cả khi tắt app, vào Cài đặt › “Xuất nhắc nhở ra Lịch điện thoại”.</div>`}
 
 /* ---------- NGƯỜI THÂN ---------- */
 function renderPeople(){
   const t=today(),q=peopleQ.toLowerCase();
   const L=recs('person').filter(i=>!q||(R[i].name+' '+(R[i].rel||'')+' '+(R[i].phone||'')).toLowerCase().includes(q)).map(i=>{
-    const r=R[i],b=r.bmode&&r.bmode!=='none'?nextOf(k=>!!bdayOn(r,k),t,370):null,g=r.gio?nextOf(k=>lunarMatch(k,+r.gld,+r.glm),t,400):null;
-    return {i,r,b,g,n:[b,g].filter(Boolean).sort()[0]||'9'}}).sort((a,b)=>a.n.localeCompare(b.n)||a.r.name.localeCompare(b.r.name,'vi'));
+    const r=R[i],b=r.bmode&&r.bmode!=='none'?nextOf(k=>!!bdayOn(r,k),t,370):null;
+    return {i,r,b,n:b||'9'}}).sort((a,b)=>a.n.localeCompare(b.n)||a.r.name.localeCompare(b.r.name,'vi'));
   $('#v-people').innerHTML=`<input class="search" id="pQ" placeholder="🔍 Tìm người…" value="${esc(peopleQ)}">
-    ${L.map(({i,r,b,g})=>`<div class="prow"><button class="pav" data-edit="person:${i}" style="background:${MOD.people.c}">${esc((r.name.trim().split(/\s+/).pop()||'?')[0].toUpperCase())}</button>
+    ${L.map(({i,r,b})=>`<div class="prow"><button class="pav" data-edit="person:${i}" style="background:${MOD.people.c}">${esc((r.name.trim().split(/\s+/).pop()||'?')[0].toUpperCase())}</button>
       <button class="pi" data-edit="person:${i}"><b>${esc(r.name)}</b>${r.rel?` <span class="tag">${esc(r.rel)}</span>`:''}
-      ${b?`<small>🎂 ${relDay(b)}${(()=>{const s=bdayOn(r,b);return s&&s!=='Sinh nhật'?' · '+esc(s):''})()}</small>`:''}${g?`<small>🕯️ Giỗ ${r.gld}/${r.glm} âm · ${relDay(g)}</small>`:''}</button>
-      ${r.phone?`<a class="call" href="tel:${esc(r.phone.replace(/[^\d+]/g,''))}">📞</a>`:''}</div>`).join('')||`<div class="empty"><div class="big">👨‍👩‍👧</div>${q?'Không tìm thấy':'Thêm người thân để không quên sinh nhật, ngày giỗ'}</div>`}`;
+      ${b?`<small>🎂 ${relDay(b)}${(()=>{const s=bdayOn(r,b);return s&&s!=='Sinh nhật'?' · '+esc(s):''})()}</small>`:''}</button>
+      ${r.phone?`<a class="call" href="tel:${esc(r.phone.replace(/[^\d+]/g,''))}">📞</a>`:''}</div>`).join('')||`<div class="empty"><div class="big">👨‍👩‍👧</div>${q?'Không tìm thấy':'Thêm người thân để không quên sinh nhật.<br>Ngày giỗ đã có mục riêng 🕯️'}</div>`}`;
   const p=$('#pQ');p.oninput=()=>{peopleQ=p.value;const pos=p.selectionStart;renderPeople();const n=$('#pQ');n.focus();n.setSelectionRange(pos,pos)}}
+
+/* ---------- NGÀY GIỖ ---------- */
+function renderGio(){
+  const t=today(),L=recs('gio').map(i=>({i,r:R[i],n:gioNext(R[i],t)})).sort((a,b)=>(a.n||'9').localeCompare(b.n||'9')||a.r.name.localeCompare(b.r.name,'vi'));
+  let cur='';
+  $('#v-gio').innerHTML=L.map(({i,r,n})=>{const d=n?diffDays(t,n):null,mh=n?`Tháng ${lunarOf(n).m} âm lịch`:'';let h='';
+    if(mh!==cur){cur=mh;h+=`<div class="month">${mh}</div>`}
+    return h+`<button class="ev" data-edit="gio:${i}"><i style="background:${MOD.gio.c}">🕯️</i><div><b>${esc(gioName(r))}</b><small>${esc(gioSub(r,n||t))}</small>${n?`<small class="${d<=7?'red':''}">${d===0?'🕯️ Hôm nay':relDay(n)} · ${fmtDMY(n)} dương lịch</small>`:''}</div></button>`}).join('')||
+    `<div class="empty"><div class="big">🕯️</div>Chưa có ngày giỗ nào.<br>Bấm ＋ để thêm ngày giỗ ông bà, tổ tiên trong gia đình.</div>`;
+  $('#v-gio').innerHTML+=`<div class="note" style="margin-top:12px">Mỗi ngày giỗ tự lặp lại hằng năm theo âm lịch, nhắc trước 7 ngày, trước 1 ngày và đúng ngày (lúc ${S.evTime||'08:00'}). Để được nhắc cả khi tắt app: Cài đặt › “Xuất tất cả ra Lịch điện thoại”.</div>`}
 
 /* ---------- TÀI CHÍNH ---------- */
 function renderMoney(){
@@ -519,7 +543,7 @@ async function openVault(id){
 
 /* ---------- THÊM ---------- */
 function renderMore(){
-  const cnt={cal:'',diary:recs('diary').length,task:recs('task').filter(i=>!R[i].done).length,rem:recs('rem').length,people:recs('person').length,money:'',sub:recs('sub').length,habit:recs('habit').length,vault:recs('vault').length};
+  const cnt={cal:'',diary:recs('diary').length,task:recs('task').filter(i=>!R[i].done).length,rem:recs('rem').length,people:recs('person').length,gio:recs('gio').length,money:'',sub:recs('sub').length,habit:recs('habit').length,vault:recs('vault').length};
   $('#v-more').innerHTML=`<div class="mods">${TABBABLE.map(m=>`<button data-go="${m}"><span class="ti" style="background:${MOD[m].c}">${MOD[m].i}</span><b>${MOD[m].n}</b><small>${cnt[m]!==''&&cnt[m]!=null?cnt[m]+' mục':''}</small></button>`).join('')}
     <button data-act="tk"><span class="ti" style="background:var(--tk)">🍃</span><b>24 tiết khí</b><small></small></button>
     <button data-go="set"><span class="ti" style="background:#8a8277">⚙️</span><b>Cài đặt</b><small></small></button></div>
@@ -527,18 +551,19 @@ function renderMore(){
 
 /* ---------- MENU THÊM NHANH ---------- */
 function openMenu(dk){
-  const it=[['write','📔','Nhật ký',MOD.diary.c],['task','✅','Việc',MOD.task.c],['rem','🔔','Lời nhắc',MOD.rem.c],['out','💸','Khoản chi','#c9764f'],['in','💵','Khoản thu',MOD.money.c],['person','👤','Người thân',MOD.people.c],['sub','💳','Gói đăng ký',MOD.sub.c],['vault','🗂️','Lưu giấy tờ',MOD.vault.c]];
+  const it=[['write','📔','Nhật ký',MOD.diary.c],['task','✅','Việc',MOD.task.c],['rem','🔔','Lời nhắc',MOD.rem.c],['out','💸','Khoản chi','#c9764f'],['in','💵','Khoản thu',MOD.money.c],['person','👤','Người thân',MOD.people.c],['gio','🕯️','Ngày giỗ',MOD.gio.c],['sub','💳','Gói đăng ký',MOD.sub.c],['vault','🗂️','Lưu giấy tờ',MOD.vault.c]];
   $('#mGrid').innerHTML=it.map(([a,i,n,c])=>`<button data-m="${a}"><span class="ti" style="background:${c}">${i}</span>${n}</button>`).join('');
   $('#menu').dataset.d=dk;$('#menu').classList.remove('hidden')}
 function menuAct(a,dk){
   $('#menu').classList.add('hidden');
   ({write:()=>openEntry(null,dk),task:()=>openForm('task',null,{due:dk}),rem:()=>openForm('rem',null,{date:dk}),out:()=>openForm('tx',null,{type:'out',date:dk}),in:()=>openForm('tx',null,{type:'in',cat:'salary',date:dk}),
-    person:()=>openForm('person'),sub:()=>openForm('sub',null,{start:dk}),vault:()=>openForm('vault')})[a]()}
+    person:()=>openForm('person'),gio:()=>openForm('gio'),sub:()=>openForm('sub',null,{start:dk}),vault:()=>openForm('vault')})[a]()}
 
 /* ---------- BIỂU MẪU CHUNG ---------- */
 const DEF={task:()=>({title:'',due:'',time:'',star:false,note:'',done:false}),
   rem:()=>({title:'',freq:'once',lunar:false,ld:'1',lm:'1',date:today(),time:'08:00',label:'personal',on:true,note:''}),
-  person:()=>({name:'',rel:'',phone:'',bmode:'none',bday:'',bld:'1',blm:'1',byear:'',gio:false,gld:'1',glm:'1',note:''}),
+  person:()=>({name:'',rel:'',phone:'',bmode:'none',bday:'',bld:'1',blm:'1',byear:'',note:''}),
+  gio:()=>({name:'',rel:'',ld:'1',lm:'1',year:'',place:'',note:''}),
   tx:()=>({type:'out',amount:0,cat:'food',who:'',paid:false,date:today(),note:''}),
   sub:()=>({name:'',price:0,cycle:'month',start:today(),pre:'3',on:true,note:''}),
   habit:()=>({name:'',icon:'💧',days:{}}),
@@ -547,7 +572,7 @@ const FORMS={
   task:{t:'Việc cần làm',f:v=>[{n:'title',t:'text',l:'Việc cần làm',req:1,ph:'VD: Gọi ngân hàng, gửi hồ sơ…'},{n:'due',t:'date',l:'Hạn (để trống = hộp chờ)',clear:1},
     ...(v.due?[{n:'time',t:'time',l:'Giờ (không bắt buộc)',clear:1}]:[]),{n:'star',t:'switch',l:'⭐ Quan trọng'},{n:'done',t:'switch',l:'Đã xong'},{n:'note',t:'area',l:'Ghi chú'}]},
   rem:{t:'Lời nhắc',f:v=>{const lun=v.lunar&&(v.freq==='month'||v.freq==='year');return [
-    {n:'title',t:'text',l:'Nhắc việc gì',req:1,ph:'VD: Đóng tiền điện, giỗ ông nội, uống thuốc…'},
+    {n:'title',t:'text',l:'Nhắc việc gì',req:1,ph:'VD: Đóng tiền điện, khám định kỳ, uống thuốc…'},
     {n:'freq',t:'chips',l:'Tần suất',o:FREQ},
     ...(v.freq==='month'||v.freq==='year'?[{n:'lunar',t:'switch',l:'🌙 Theo âm lịch'}]:[]),
     ...(lun?[{n:'ld',t:'sel',l:'Ngày âm lịch',o:range(1,30)},...(v.freq==='year'?[{n:'lm',t:'sel',l:'Tháng âm lịch',o:range(1,12)}]:[])]
@@ -559,8 +584,12 @@ const FORMS={
   person:{t:'Người thân',f:v=>[{n:'name',t:'text',l:'Họ tên',req:1},{n:'rel',t:'chips',l:'Quan hệ',o:REL.map(x=>[x,x])},{n:'phone',t:'tel',l:'Số điện thoại'},
     {n:'bmode',t:'chips',l:'Sinh nhật',o:[['none','Không rõ'],['solar','Dương lịch'],['lunar','Âm lịch']]},
     ...(v.bmode==='solar'?[{n:'bday',t:'date',l:'Ngày sinh'}]:v.bmode==='lunar'?[{n:'bld',t:'sel',l:'Ngày âm',o:range(1,30)},{n:'blm',t:'sel',l:'Tháng âm',o:range(1,12)},{n:'byear',t:'num',l:'Năm sinh (không bắt buộc)'}]:[]),
-    {n:'gio',t:'switch',l:'🕯️ Có ngày giỗ'},...(v.gio?[{n:'gld',t:'sel',l:'Giỗ – ngày âm',o:range(1,30)},{n:'glm',t:'sel',l:'Giỗ – tháng âm',o:range(1,12)}]:[]),
     {n:'note',t:'area',l:'Ghi chú (sở thích, món thích ăn, size áo…)'}]},
+  gio:{t:'Ngày giỗ',f:v=>[{n:'rel',t:'chips',l:'Vai vế',o:GREL.map(x=>[x,x])},{n:'name',t:'text',l:'Tên người mất',req:1,ph:'VD: Nguyễn Văn A, nội, ngoại…'},
+    {n:'ld',t:'sel',l:'Ngày âm lịch',o:range(1,30)},{n:'lm',t:'sel',l:'Tháng âm lịch',o:range(1,12)},
+    {n:'year',t:'num',l:'Năm mất – âm lịch (không bắt buộc, để biết giỗ lần thứ mấy)'},
+    {n:'place',t:'text',l:'Làm giỗ tại',ph:'VD: Nhà thờ họ, nhà bác Hai…'},{n:'note',t:'area',l:'Ghi chú (món cúng, người cần mời…)'},
+    {t:'hint',h:v=>{const n=gioNext(v);return n?`🕯️ Giỗ tới: <b>${DOWL[parse(n).getDay()]}, ${fmtDMY(n)}</b> (${relDay(n)})<br>🔔 Nhắc trước 7 ngày (${fmtDM(addDays(n,-7))}), trước 1 ngày (${fmtDM(addDays(n,-1))}) và đúng ngày, lặp lại hằng năm theo âm lịch.`:''}}]},
   tx:{t:'Khoản tiền',f:v=>[{n:'type',t:'chips',l:'Loại',o:TXT},{n:'amount',t:'money',l:'Số tiền',req:1},
     ...(v.type==='out'||v.type==='in'?[{n:'cat',t:'chips',l:'Danh mục',o:(v.type==='in'?CAT_IN:CAT_OUT).map(x=>[x[0],x[1]+' '+x[2]])}]
       :[{n:'who',t:'text',l:v.type==='lend'?'Cho ai vay':'Vay của ai',req:1},{n:'paid',t:'switch',l:'Đã trả xong'}]),
@@ -662,6 +691,7 @@ async function sync(){
       const has=await pRaw(pid);
       if(!has&&rph.includes(pid)){const r=await api('GET',`id=${id}&p=${pid}`);if(r.status===200){try{const u=await decPhoto(r.j);await pPut(pid,u);pCache[pid]=u;changed=true}catch{}}}
       else if(has&&!rph.includes(pid)){const u=await pUrl(pid);if(u){const r=await api('PUT',`id=${id}&p=${pid}`,await encPhoto(u),tok);if(r.status===413)toast('Có ảnh quá lớn để đồng bộ')}}}
+    if(changed&&migGio())changed=true;
     if(changed){await save(true);if(!$('#app').classList.contains('hidden')&&$('#form').classList.contains('hidden')&&$('#sheet').classList.contains('hidden'))render()}
     localStorage.setItem('nk_lastsync',String(Date.now()));renderSyncUI();
   }catch(e){setSyncStatus('Lỗi đồng bộ: '+(e.message||e),true)}
@@ -742,7 +772,9 @@ function makeAllIcs(){
   for(const id of recs('person')){const p=R[id];
     if(p.bmode==='solar'&&p.bday){icsEv(L,{uid:id+'-sn',date:p.bday,title:'🎂 Sinh nhật '+p.name,desc:p.note,rrule:'FREQ=YEARLY',alarms:['PT0S','P1D']});n++}
     if(p.bmode==='lunar')lunarDates(+p.bld,+p.blm,10).forEach(k=>{icsEv(L,{uid:id+'-sn-'+k,date:k,title:`🎂 Sinh nhật ${p.name} (${p.bld}/${p.blm} âm)`,alarms:['PT0S','P1D']});n++});
-    if(p.gio)lunarDates(+p.gld,+p.glm,10).forEach(k=>{icsEv(L,{uid:id+'-gio-'+k,date:k,title:`🕯️ Giỗ ${p.name} (${p.gld}/${p.glm} âm)`,alarms:['PT0S','P3D']});n++})}
+  }
+  for(const id of recs('gio')){const g=R[id];
+    lunarDates(+g.ld,+g.lm,10).forEach(k=>{icsEv(L,{uid:id+'-'+k,date:k,title:`🕯️ Giỗ ${gioName(g)} (${g.ld}/${g.lm} âm)`,desc:[gioNth(g,k),g.place?'Tại '+g.place:'',g.note].filter(Boolean).join('\n'),alarms:['PT0S','P1D','P7D']});n++})}
   for(const id of recs('sub')){const s=R[id];if(s.on===false||!s.start)continue;
     icsEv(L,{uid:id,date:s.start,title:`💳 Gia hạn ${s.name} · ${fmt(s.price)}`,desc:s.note,rrule:'FREQ='+(s.cycle==='year'?'YEARLY':'MONTHLY'),alarms:+s.pre>0?['PT0S','P'+s.pre+'D']:['PT0S']});n++}
   for(const id of recs('vault')){const v=R[id];if(v.exp&&v.exp>=t){icsEv(L,{uid:id,date:v.exp,title:'⏳ Hết hạn: '+v.title,alarms:['PT0S','P7D','P30D']});n++}}
@@ -1030,7 +1062,7 @@ $('#impFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;
   try{const j=JSON.parse(await f.text());if(!j.entries||typeof j.entries!=='object')throw 0;
     if(!confirm(`Nhập ${Object.keys(j.entries).length} mục? Mục trùng sẽ bị ghi đè.`))return;
     for(const id in (j.photos||{})){await pPut(id,j.photos[id]);pCache[id]=j.photos[id]}
-    const mi=migrate(j.entries);Object.keys(mi).forEach(k=>{delete tombs[k];mi[k].at=Date.now()});Object.assign(R,mi);save();render();toast('Đã nhập xong ✓')}
+    const mi=migrate(j.entries);Object.keys(mi).forEach(k=>{delete tombs[k];mi[k].at=Date.now()});Object.assign(R,mi);migGio();save();render();toast('Đã nhập xong ✓')}
   catch{alert('File không hợp lệ')}e.target.value=''};
 $('#wipe').onclick=()=>{if(confirm('Xoá TOÀN BỘ dữ liệu (nhật ký, việc, nhắc nhở, tài chính…)? Không thể khôi phục.')&&confirm('Chắc chắn xoá hết?')){
   Object.keys(R).forEach(k=>tombs[k]=Date.now());R={};save();pClear();Object.keys(pCache).forEach(k=>delete pCache[k]);render();toast('Đã xoá hết')}};
