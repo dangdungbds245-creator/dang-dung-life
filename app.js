@@ -315,7 +315,7 @@ const FAB={diary:()=>openEntry(null,today()),cal:()=>openMenu(selDay),home:()=>o
   rem:()=>openForm('rem'),people:()=>openForm('person'),gio:()=>openForm('gio'),money:()=>moneyTab==='loan'?openForm('tx',null,{type:'lend'}):moneyTab==='plan'?openForm('inc'):openForm('tx'),sub:()=>openForm('sub'),habit:()=>openForm('habit'),vault:()=>openForm('vault')};
 function go(v){view=v;render();$('main').scrollTop=0}
 function render(){
-  syncLastW();
+  syncLastW();habCache();
   const tabs=['home',...S.tabs,'more'];
   $('#hTitle').textContent=view==='home'?greet():MOD[view].n;
   const subs={home:()=>{const d=new Date();return `${DOWL[d.getDay()]}, ${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} · ${lunarTxt(today())} âm lịch`},
@@ -683,12 +683,24 @@ function renderSub(){
     `<div class="empty"><div class="big">💳</div>Chưa có gói nào.<br>Thêm iCloud, Netflix, Google One, tên miền, bảo hiểm… để được nhắc trước ngày gia hạn.</div>`}`}
 
 /* ---------- THÓI QUEN ---------- */
+const habMsg=r=>(r.rmsg||'').trim()||(/ngủ/i.test(r.name||'')?`${r.rt||'23:00'} rồi, đi ngủ thôi 😴`:`${r.rt||''} rồi — ${r.name||''}`);
+// danh sách giờ nhắc thói quen (không chứa dữ liệu nhạy cảm) để vẫn nhắc được khi app đang khoá
+function habCache(){try{put('nk_hrem',recs('habit').filter(i=>R[i].rem&&R[i].rt).map(i=>({id:i,t:R[i].rt,m:habMsg(R[i]),ic:R[i].icon||'⏰'})))}catch{}}
+function habCheck(){
+  if(!S.ntf)return;const L=get('nk_hrem',[]);if(!L.length)return;
+  const t=today(),n=new Date(),now=`${pad(n.getHours())}:${pad(n.getMinutes())}`,sent=get('nk_ntf',{});let ch=false;
+  for(const h of L){const k='h:'+h.id+':'+t,[hh,mm]=h.t.split(':').map(Number),end=`${pad(Math.min(23,hh+1))}:${hh>=23?'59':pad(mm)}`;
+    if(now>=h.t&&now<=end&&!sent[k]){sent[k]=t;ch=true;notify(`${h.ic} ${h.m}`,'Đăng Dũng Life',k);if(!document.hidden)nudge(h)}}
+  if(ch)put('nk_ntf',sent)}
+function nudge(h){let el=$('#nudge');if(!el){el=document.createElement('div');el.id='nudge';document.body.appendChild(el)}
+  el.innerHTML=`<div class="nbox"><div class="nic">${esc(h.ic)}</div><b>${esc(h.m)}</b><button class="btn" id="nudgeOk">OK</button></div>`;
+  el.classList.add('on');$('#nudgeOk').onclick=()=>el.classList.remove('on')}
 function habStreak(r){const t=today();let d=r.days&&r.days[t]?t:addDays(t,-1),n=0;while(r.days&&r.days[d]){n++;d=addDays(d,-1)}return n}
 function renderHabit(){
   const t=today(),L=recs('habit').sort((a,b)=>(R[a].c||R[a].at||0)-(R[b].c||R[b].at||0));
   const days=Array.from({length:7},(_,i)=>addDays(t,i-6));
   $('#v-habit').innerHTML=L.map(i=>{const r=R[i],on=r.days&&r.days[t],st=habStreak(r),m30=Array.from({length:30},(_,j)=>addDays(t,-j)).filter(k=>r.days&&r.days[k]).length;
-    return `<div class="hab${on?' on':''}"><div class="hh"><button class="hi" data-edit="habit:${i}">${r.icon||'🌱'}</button><button class="hn" data-edit="habit:${i}"><b>${esc(r.name)}</b><small>${st?`🔥 ${st} ngày liên tiếp · `:''}${m30}/30 ngày</small></button>
+    return `<div class="hab${on?' on':''}"><div class="hh"><button class="hi" data-edit="habit:${i}">${r.icon||'🌱'}</button><button class="hn" data-edit="habit:${i}"><b>${esc(r.name)}</b><small>${st?`🔥 ${st} ngày liên tiếp · `:''}${m30}/30 ngày${r.rem&&r.rt?' · ⏰ '+r.rt:''}</small></button>
       <button class="hck${on?' on':''}" data-hab="${i}">${on?'✓':'○'}</button></div>
       <div class="hdays">${days.map(k=>`<button class="${r.days&&r.days[k]?'on':''}${k===t?' td':''}" data-habd="${i}|${k}"><small>${DOW[(parse(k).getDay()+6)%7]}</small>${+k.slice(8)}</button>`).join('')}</div></div>`}).join('')+
     (L.length?'':`<div class="empty"><div class="big">🌱</div>Bắt đầu từ một thói quen nhỏ</div>`)+
@@ -741,7 +753,7 @@ const DEF={task:()=>({title:'',due:'',time:'',star:false,note:'',done:false}),
   bud:()=>({cat:'food',amount:0}),
   pay:()=>({a:0,d:today(),w:''}),
   sub:()=>({name:'',price:0,w:WDEF,cycle:'month',start:today(),pre:'3',on:true,note:''}),
-  habit:()=>({name:'',icon:'💧',days:{}}),
+  habit:()=>({name:'',icon:'💧',days:{},rem:false,rt:'',rmsg:''}),
   vault:()=>({title:'',cat:'doc',body:'',exp:'',photos:[]})};
 const FORMS={
   task:{t:'Việc cần làm',f:v=>[{n:'title',t:'text',l:'Việc cần làm',req:1,ph:'VD: Gọi ngân hàng, gửi hồ sơ…'},{n:'due',t:'date',l:'Hạn (để trống = hộp chờ)',clear:1},
@@ -807,7 +819,10 @@ const FORMS={
     ...(wallets().length>1?[{n:'w',t:'sel',l:'Trả từ ví',o:wOpts()}]:[]),
     {n:'pre',t:'chips',l:'Nhắc trước',o:[['0','Đúng ngày'],['1','1 ngày'],['3','3 ngày'],['7','7 ngày'],['30','30 ngày']]},{n:'on',t:'switch',l:'Đang dùng'},
     {n:'note',t:'area',l:'Ghi chú (tài khoản, cách huỷ…)'},{t:'hint',h:v=>{const n=v.start?subNext(v,today()):null;return n?`Lần gia hạn tới: <b>${fmtDMY(n)}</b>`:''}}]},
-  habit:{t:'Thói quen',f:()=>[{n:'name',t:'text',l:'Tên thói quen',req:1,ph:'VD: Uống 8 ly nước'},{n:'icon',t:'chips',l:'Biểu tượng',o:HICONS.map(x=>[x,x])}]},
+  habit:{t:'Thói quen',f:v=>[{n:'name',t:'text',l:'Tên thói quen',req:1,ph:'VD: Uống 8 ly nước'},{n:'icon',t:'chips',l:'Biểu tượng',o:HICONS.map(x=>[x,x])},
+    {n:'rem',t:'switch',l:'⏰ Nhắc theo giờ mỗi ngày'},
+    ...(v.rem?[{n:'rt',t:'time',l:'Giờ nhắc'},{n:'rmsg',t:'text',l:'Lời nhắc',ph:habMsg(Object.assign({},v,{rmsg:''}))},
+      {t:'hint',h:v=>`⏰ Mỗi ngày lúc <b>${v.rt||'—'}</b>: “${esc(habMsg(v))}”.<br>Đang mở app (điện thoại hoặc máy tính) thì app báo ngay. Để iPhone báo cả khi không mở app: Cài đặt › “Xuất tất cả ra Lịch điện thoại”.`}]:[])]},
   vault:{t:'Kho cá nhân',f:()=>[{n:'title',t:'text',l:'Tên',req:1,ph:'VD: CCCD, bảo hành máy lạnh, số tài khoản…'},{n:'cat',t:'chips',l:'Loại',o:VCAT.map(x=>[x[0],x[1]+' '+x[2]])},
     {n:'body',t:'area',l:'Nội dung',ph:'Số, mã, ngày cấp, nơi mua, ghi chú…'},{n:'exp',t:'date',l:'Ngày hết hạn (nếu có)',clear:1},{n:'photos',t:'photos',l:'Ảnh chụp'}]}};
 let fK=null,fId=null,fV=null,fAdded=[];
@@ -995,6 +1010,7 @@ function makeAllIcs(){
   for(const id of recs('sub')){const s=R[id];if(s.on===false||!s.start)continue;
     icsEv(L,{uid:id,date:s.start,title:`💳 Gia hạn ${s.name} · ${fmt(s.price)}`,desc:s.note,rrule:'FREQ='+(s.cycle==='year'?'YEARLY':'MONTHLY'),alarms:+s.pre>0?['PT0S','P'+s.pre+'D']:['PT0S']});n++}
   for(const id of recs('vault')){const v=R[id];if(v.exp&&v.exp>=t){icsEv(L,{uid:id,date:v.exp,title:'⏳ Hết hạn: '+v.title,alarms:['PT0S','P7D','P30D']});n++}}
+  for(const id of recs('habit')){const h=R[id];if(h.rem&&h.rt){icsEv(L,{uid:id+'-hab',date:t,time:h.rt,title:`${h.icon||'⏰'} ${habMsg(h)}`,rrule:'FREQ=DAILY'});n++}}
   if(S.moon)lunarMonthly(1,24).concat(lunarMonthly(15,24)).forEach(k=>{const l=lunarOf(k);icsEv(L,{uid:'moon-'+k,date:k,title:`${l.d===15?'🌕 Rằm':'🌑 Mùng 1'} tháng ${l.m} âm lịch`});n++});
   L.push('END:VCALENDAR');
   if(!n)return toast('Chưa có việc định kỳ, việc có giờ, sinh nhật hay gia hạn nào để xuất');
@@ -1049,7 +1065,7 @@ function evCheck(){
   for(const k in sent)if(sent[k]<addDays(t,-3)){delete sent[k];ch=true}
   if(ch)put('nk_ntf',sent)}
 function remCheck(){
-  try{tkCheck()}catch{}try{evCheck()}catch{}
+  try{tkCheck()}catch{}try{evCheck()}catch{}try{habCheck()}catch{}
   if(!remDue())return;const t=today();
   if(localStorage.getItem('nk_remd')===t)return;
   if(notify('📔 Đến giờ viết nhật ký','Dành vài phút ghi lại ngày hôm nay nhé!'))localStorage.setItem('nk_remd',t);
@@ -1154,7 +1170,7 @@ $('#fBody').addEventListener('input',e=>{const el=e.target,n=el.dataset.n;if(!n|
   if(el.dataset.money){fV[n]=parseMoney(el.value);const h=$(`[data-mh="${n}"]`);if(h)h.textContent=fV[n]?'= '+fmt(fV[n]):'Gõ tắt được: 50k = 50.000đ, 2tr = 2.000.000đ'}
   else fV[n]=el.value});
 $('#fBody').addEventListener('change',e=>{const el=e.target,n=el.dataset.n;if(!n)return;
-  if(el.type==='checkbox'){fV[n]=el.checked;renderForm()}
+  if(el.type==='checkbox'){fV[n]=el.checked;if(fK==='habit'&&n==='rem'&&el.checked&&!fV.rt)fV.rt=/ngủ/i.test(fV.name||'')?'23:00':'08:00';renderForm()}
   else if(el.tagName==='SELECT'||el.type==='date'||el.type==='time'){fV[n]=el.value;renderForm()}
   else if(el.dataset.money)el.value=fV[n]?fmtN(fV[n]):''});
 $('#fBody').addEventListener('click',async e=>{let b;
