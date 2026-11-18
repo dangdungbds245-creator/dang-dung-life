@@ -18,7 +18,7 @@ const diffDays=(a,b)=>Math.round((parse(b)-parse(a))/864e5);
 const fmtDM=k=>`${+k.slice(8,10)}/${+k.slice(5,7)}`;
 const fmtDMY=k=>`${+k.slice(8,10)}/${+k.slice(5,7)}/${k.slice(0,4)}`;
 const range=(a,b)=>Array.from({length:b-a+1},(_,i)=>[String(a+i),String(a+i)]);
-const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('on'),2000)};
+const toast=m=>{const t=$('#toast');if(t.classList.contains('upd'))return;t.textContent=m;t.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('on'),2000)};
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const fmtN=n=>Math.round(+n||0).toLocaleString('vi-VN');
 const fmt=n=>fmtN(n)+'đ';
@@ -163,8 +163,9 @@ async function submitLock(){
       const salt=crypto.getRandomValues?[...crypto.getRandomValues(new Uint8Array(8))].join(''):String(Math.random());
       localStorage.setItem(K.salt,salt);localStorage.setItem(K.pw,await hash(p,salt));
       return unlock(canCrypto?await deriveKey(p,salt):null)}
-    const salt=localStorage.getItem(K.salt);
-    if(await checkPw(p))unlock(canCrypto?await deriveKey(p,salt):null);
+    const salt=localStorage.getItem(K.salt),btn=$('#lkBtn');btn.disabled=true;btn.textContent='Đang mở…';
+    const [ok,k]=await Promise.all([checkPw(p),canCrypto?deriveKey(p,salt):null]).finally(()=>{btn.disabled=false;btn.textContent='Mở khoá'});
+    if(ok)unlock(k);
     else{err.textContent='Sai mật khẩu';$('#pw1').value=''}
   }catch(e){err.textContent='Lỗi mở khoá: '+(e.message||e)}}
 async function bioUnlock(){
@@ -1081,5 +1082,9 @@ $('#wipe').onclick=()=>{if(confirm('Xoá TOÀN BỘ dữ liệu (nhật ký, vi�
   Object.keys(R).forEach(k=>tombs[k]=Date.now());R={};save();pClear();Object.keys(pCache).forEach(k=>delete pCache[k]);render();toast('Đã xoá hết')}};
 
 applyTheme();drawAvatar();lockUI();
-if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator&&location.protocol.startsWith('http')){navigator.serviceWorker.register('sw.js').catch(()=>{});
+  // bản mới tải ngầm xong → báo để chạm cập nhật (không làm mất dữ liệu)
+  navigator.serviceWorker.addEventListener('message',e=>{if(e.data!=='updated')return;const t=$('#toast');
+    t.innerHTML='✨ Có bản mới · <u>chạm để cập nhật</u>';clearTimeout(toast.t);t.classList.add('on','upd');t.onclick=()=>location.reload()});
+  navigator.serviceWorker.ready.then(()=>setTimeout(()=>navigator.serviceWorker.controller&&navigator.serviceWorker.controller.postMessage('check'),3000))}
 })();
