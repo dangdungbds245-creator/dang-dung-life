@@ -64,7 +64,7 @@ const catOf=(t,id)=>((t==='in'?CAT_IN:CAT_OUT).find(x=>x[0]===id))||['other','�
 let R={};          // mọi bản ghi {id: {k, ...}} — nhật ký không có k
 let tombs={};      // bản ghi đã xoá {id: thời điểm}
 const SDEF={dark:false,font:16,lock:5,quote:true,remOn:false,remTime:'21:00',tkShow:true,tkOn:true,tkTime:'07:00',tkPre:false,
-  tabs:['diary','task','rem'],evTime:'08:00',moon:false,ntf:true};
+  tabs:['diary','task','rem'],evTime:'08:00',moon:false,ntf:true,ai:true,aiBrief:true,aiDiary:false};
 const HDEF={hero:1,tk:1,today:1,up:1,mini:1,mem:1};
 let S=Object.assign({},SDEF,get(K.set,{}));S.home=Object.assign({},HDEF,S.home||{});
 if(!Array.isArray(S.tabs)||S.tabs.length!==3)S.tabs=SDEF.tabs.slice();
@@ -339,6 +339,7 @@ function renderHome(){
     h+=`<div class="hero"><div class="hd"><b>${d.getDate()}</b><div class="hm"><span>${DOWL[d.getDay()]}</span><small>Tháng ${d.getMonth()+1}, ${d.getFullYear()}</small></div>
       <div class="al"><small>Âm lịch</small><b>${l.d}/${l.m}${l.leap?'N':''}</b><small>${canChiYear(l.y)}</small></div></div>
       ${S.quote?`<button class="hq" id="quoteCard"><q>“${esc(qt)}”</q>${qa?`<small>— ${esc(qa)}</small>`:''}</button>`:''}</div>`}
+  if(S.ai)h+=`<button class="aiask" data-act="ai-open"><span>✨</span>Hỏi hoặc ghi nhanh… <small>VD: chi 45k cà phê bằng Momo</small></button>`+briefHtml();
   if(S.home.tk)h+=tkCardHtml();
   if(S.home.today){
     const ev=eventsOn(t,true).filter(e=>e.k!=='task');
@@ -375,7 +376,7 @@ function renderHome(){
     const md=t.slice(4),mem=diaryIds().filter(i=>R[i].date.endsWith(md)&&R[i].date<t).slice(0,3);
     if(mem.length)h+=`<div class="box"><div class="bh"><b>Ngày này năm xưa</b></div>${mem.map(k=>{const e=R[k],y=d.getFullYear()-parseInt(e.date);
       return `<button class="ev" data-read="${k}"><i style="background:${MOD.diary.c}">📔</i><div><b>${y} năm trước</b><small>${esc((e.title||e.body||'').replace(/\s+/g,' ').slice(0,70))}</small></div></button>`}).join('')}</div>`}
-  $('#v-home').innerHTML=h||'<div class="empty">Bật các thẻ trong Cài đặt › Trang Hôm nay</div>'}
+  $('#v-home').innerHTML=h||'<div class="empty">Bật các thẻ trong Cài đặt › Trang Hôm nay</div>';if(S.ai&&S.aiBrief)aiBrief()}
 function taskRow(i){const r=R[i],t=today(),late=r.due&&r.due<t&&!r.done;
   const meta=[r.due?(late?`Quá hạn ${diffDays(r.due,t)} ngày`:r.due===t?'Hôm nay':relDay(r.due)):'',r.time||'',r.note?'📝':''].filter(Boolean).join(' · ');
   return `<div class="trow${r.done?' done':''}"><button class="ck${r.done?' on':''}" data-done="${i}" aria-label="Xong">${r.done?'✓':''}</button><button class="tt" data-edit="task:${i}"><b>${r.star?'⭐ ':''}${esc(r.title)}</b>${meta?`<small class="${late?'red':''}">${esc(meta)}</small>`:''}</button></div>`}
@@ -961,6 +962,136 @@ async function linkDevice(inApp){
     err.textContent='Đang tải dữ liệu…';if(inApp){lock();toast('Đã nối đồng bộ, đang tải dữ liệu…')}await unlock(key);
   }catch(e){err.textContent='Không kết nối được: '+(e.message||e)}}
 
+
+/* ---------- TRỢ LÝ AI (Claude, qua máy chủ trung gian của anh) ---------- */
+const AI_URL='https://nhatky-sync.vercel.app/api/ai';
+let aiHist=[],aiBusy=false;
+const aiSent=()=>'tài chính, việc, định kỳ, lịch, người thân, ngày giỗ, thói quen'+(S.aiDiary?', nhật ký 10 bài gần nhất':'')+' · không gồm kho cá nhân'+(S.aiDiary?'':', nhật ký');
+function aiCtx(){
+  const t=today(),B=balances(),f=forecast(90),lun=lunarOf(t),mk=t.slice(0,7);
+  const months=[0,1,2,3].map(n=>{const k=mkAdd(mk,-n),L=monthTx(k),dm={};L.filter(r=>r.type==='out').forEach(r=>{const c=catOf('out',r.cat)[2];dm[c]=(dm[c]||0)+(+r.amount||0)});return {thang:k,thu:sumT(L,'in'),chi:sumT(L,'out'),chi_theo_danh_muc:dm}});
+  const ev=[];for(let i=0;i<=30;i++){const k=addDays(t,i);eventsOn(k).filter(e=>!(e.k==='rem'&&R[e.id]&&R[e.id].freq==='day')).forEach(e=>ev.push([k,e.t+(e.s&&e.k!=='rem'?' · '+e.s:'')]))}
+  const tk=tkToday();
+  const c={
+    hom_nay:{ngay:t,thu:DOWL[parse(t).getDay()],am_lich:`${lun.d}/${lun.m}${lun.leap?' nhuận':''} năm ${canChiYear(lun.y)}`,tiet_khi:tk.cur.name,gio:new Date().toTimeString().slice(0,5)},
+    vi:wallets().map(i=>({ten:R[i].name,loai:wtOf(R[i].type)[2],so_du:Math.round(B[i]||0)})),
+    tien_dang_co:Math.round(f.start),
+    du_bao_90_ngay:{thap_nhat:Math.round(f.min),ngay_thap_nhat:f.minK,cuoi_ky:Math.round(f.end),muc_an_toan:+S.cashMin||0,chi_sinh_hoat_moi_ngay:Math.round(f.daily)},
+    thu_chi_4_thang:months,
+    ngan_sach_thang_nay:recs('bud').map(i=>R[i]).filter(b=>+b.amount>0).map(b=>({danh_muc:catOf('out',b.cat)[2],muc:+b.amount,da_chi:catSpent(mk,b.cat)})),
+    cho_xac_nhan_chi:pendingPays().map(p=>({ngay:p.k,noi_dung:p.t,so_tien:p.amt})),
+    su_kien_30_ngay:ev.slice(0,80),
+    viec_chua_xong:recs('task').filter(i=>!R[i].done).map(i=>({viec:R[i].title,han:R[i].due||'',gio:R[i].time||'',quan_trong:!!R[i].star})).slice(0,60),
+    dinh_ky:recs('rem').filter(i=>R[i].on!==false).map(i=>({viec:R[i].title,lich:freqTxt(R[i]),so_tien:R[i].money?+R[i].amt||0:0})),
+    vay_no:recs('tx').filter(i=>isLoan(R[i])&&loanLeft(R[i])).map(i=>({loai:R[i].type==='lend'?'anh cho vay':'anh đi vay',nguoi:R[i].who,tong:+R[i].amount,con_lai:loanLeft(R[i]),han:R[i].due||''})),
+    sap_thu:recs('inc').filter(i=>!R[i].got).map(i=>({khoan:R[i].title,so_tien:+R[i].amount,du_kien:R[i].date||''})),
+    goi_dang_ky:recs('sub').filter(i=>R[i].on!==false).map(i=>({ten:R[i].name,gia:+R[i].price||0,chu_ky:R[i].cycle==='year'?'năm':'tháng',gia_han_toi:subNext(R[i],t)})),
+    quy_muc_tieu:goalW().map(i=>({ten:R[i].name,dang_co:Math.round(B[i]||0),muc_tieu:+R[i].target||0})),
+    giao_dich_gan_day:recs('tx').map(i=>R[i]).filter(r=>r.date&&!isLoan(r)).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,40).map(r=>({ngay:r.date,loai:{out:'chi',in:'thu',xfer:'chuyển ví'}[r.type],so_tien:+r.amount,danh_muc:r.type==='xfer'?'':catOf(r.type,r.cat)[2],ghi_chu:r.note||''})),
+    thoi_quen:recs('habit').map(i=>({ten:R[i].name,hom_nay_da_xong:!!(R[i].days&&R[i].days[t]),chuoi_ngay:habStreak(R[i])})),
+    nguoi_than:recs('person').map(i=>{const r=R[i],b=r.bmode&&r.bmode!=='none'?nextOf(k=>!!bdayOn(r,k),t,370):null;return {ten:r.name,quan_he:r.rel||'',sinh_nhat_toi:b||''}}),
+    ngay_gio:recs('gio').map(i=>({ten:R[i].name,am_lich:`${R[i].ld}/${R[i].lm}`,duong_lich_toi:gioNext(R[i],t)||''}))};
+  if(S.aiDiary)c.nhat_ky_gan_day=recs('diary').map(i=>R[i]).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,10).map(r=>({ngay:r.date,tieu_de:r.title||'',trich:(r.body||'').slice(0,300)}));
+  return c}
+async function aiCall(body){
+  const code=syncCode();if(!code)throw new Error('Cần bật Đồng bộ trước (Cài đặt › Đồng bộ) để kết nối trợ lý.');
+  const id=await sha(code),tok=await sha('w:'+code);
+  const r=await fetch(AI_URL+'?id='+id,{method:'POST',headers:{'content-type':'application/json','x-token':tok},body:JSON.stringify(body)});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok){const m={'ai-not-configured':'Máy chủ chưa có khoá API — xem hướng dẫn cài đặt trợ lý.','daily-limit':'Hôm nay đã dùng hết lượt (giới hạn '+(j.limit||'')+' lần/ngày).','not-owner':'Mã đồng bộ này không phải chủ của trợ lý.','auth':'Không xác thực được — kiểm tra mã đồng bộ.'}[j.error];
+    throw new Error(m||('Trợ lý lỗi ('+(j.error||r.status)+')'))}
+  return j}
+// markdown nhẹ → HTML an toàn
+const aiMd=s=>esc(s||'').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').split('\n').map(l=>/^\s*[-•*]\s+/.test(l)?`<li>${l.replace(/^\s*[-•*]\s+/,'')}</li>`:l?`<p>${l}</p>`:'').join('').replace(/(<li>.*?<\/li>)+/g,m=>`<ul>${m}</ul>`);
+// item AI → bản ghi app
+function aiRec(it){
+  const t=today(),wl=(it.wallet||'').toLowerCase(),w=(wl&&wallets().find(i=>R[i].name.toLowerCase().includes(wl)||wl.includes(R[i].name.toLowerCase())))||(S.lastW&&R[S.lastW]?S.lastW:WDEF);
+  const d=/^\d{4}-\d\d-\d\d$/.test(it.date)?it.date:'',tm=/^\d\d:\d\d$/.test(it.time)?it.time:'',amt=Math.max(0,Math.round(+it.amount||0));
+  const okCat=(type,c)=>((type==='in'?CAT_IN:CAT_OUT).some(x=>x[0]===c)?c:type==='in'?'other':'other');
+  const ld=String(Math.min(30,Math.max(1,+it.ld||1))),lm=String(Math.min(12,Math.max(1,+it.lm||1)));
+  switch(it.kind){
+    case 'tx':{const type=['out','in','xfer','lend','borrow'].includes(it.type)?it.type:'out';const r={k:'tx',type,amount:amt,w,date:d||t,note:(it.title||it.note||'').trim()};
+      if(type==='out'||type==='in')r.cat=okCat(type,it.cat);if(type==='lend'||type==='borrow'){r.who=it.who||it.title||'';r.due=/^\d{4}-\d\d-\d\d$/.test(it.due)?it.due:'';r.note=it.note||''}
+      if(type==='xfer'){r.w2=wallets().find(i=>i!==w)||w}return {kind:'tx',r}}
+    case 'task':return {kind:'task',r:{k:'task',title:it.title,due:d,time:d?tm:'',star:false,note:it.note||'',done:false}};
+    case 'rem':{const freq=['day','week','month','year'].includes(it.freq)?it.freq:'month',lunar=!!it.lunar&&(freq==='month'||freq==='year');
+      return {kind:'rem',r:{k:'rem',title:it.title,freq,lunar,ld,lm,date:d||t,time:tm||'08:00',label:'personal',on:true,note:it.note||'',pre7:false,pre1:false,money:amt>0,amt,cat:okCat('out',it.cat||'bill'),w}}}
+    case 'inc':return {kind:'inc',r:{k:'inc',title:it.title,amount:amt,date:d,cat:okCat('in',it.cat||'comm'),w,note:it.note||''}};
+    case 'gio':return {kind:'gio',r:{k:'gio',name:it.title,rel:'',ld,lm,year:'',place:'',note:it.note||''}};
+    case 'person':return {kind:'person',r:{k:'person',name:it.title,rel:'',phone:'',bmode:it.lunar?'lunar':d?'solar':'none',bday:it.lunar?'':d,bld:ld,blm:lm,byear:'',note:it.note||''}};
+    case 'diary':return {kind:'diary',r:{date:d||t,title:it.title||'',body:it.note||'',mood:null,fav:false,photos:[]}}}
+  return null}
+function aiDesc(x){const r=x.r;switch(x.kind){
+  case 'tx':return r.type==='xfer'?['↔️',`Chuyển ${fmt(r.amount)}`,`${wName(r.w)} → ${wName(r.w2)}`]:r.type==='lend'||r.type==='borrow'?['🤝',`${r.type==='lend'?'Cho':'Vay'} ${r.who} ${fmt(r.amount)}`,r.due?'Hạn trả '+fmtDMY(r.due):'Chưa có hạn trả']
+    :[catOf(r.type,r.cat)[1],`${r.type==='in'?'Thu':'Chi'} ${fmt(r.amount)} · ${catOf(r.type,r.cat)[2]}`,`${r.note||''}${wallets().length>1?' · '+wName(r.w):''} · ${fmtDMY(r.date)}`];
+  case 'task':return ['✅',r.title,r.due?`Hạn ${fmtDMY(r.due)}${r.time?' '+r.time:''}`:'Hộp chờ'];
+  case 'rem':return ['🔁',r.title,freqTxt(r)+(r.money?' · '+fmt(r.amt):'')];
+  case 'inc':return ['🤝',`Sắp thu: ${r.title}`,`${fmt(r.amount)}${r.date?' · dự kiến '+fmtDMY(r.date):''}`];
+  case 'gio':return ['🕯️',`Ngày giỗ: ${r.name}`,`${r.ld}/${r.lm} âm lịch`];
+  case 'person':return ['👤',r.name,r.bmode==='solar'?'Sinh nhật '+fmtDMY(r.bday):r.bmode==='lunar'?`Sinh nhật ${r.bld}/${r.blm} âm`:''];
+  case 'diary':return ['📔','Nhật ký: '+(r.title||fmtDMY(r.date)),(r.body||'').slice(0,80)]}}
+let aiPend=[];
+function aiSaveOne(j){const x=aiPend[j];if(!x||x.done)return;
+  if(x.kind==='diary'){const id='e'+uid();R[id]=Object.assign(x.r,{at:Date.now()});delete tombs[id];save()}
+  else{if(x.kind==='tx'&&(x.r.type==='lend'||x.r.type==='borrow')&&!x.r.who)return toast('Thiếu tên người vay');putRec('e'+uid(),x.r);
+    if(x.kind==='tx'&&x.r.type==='out')budAlert(x.r.cat,x.r.date.slice(0,7),x.r.amount)}
+  x.done=true}
+function aiOpen(q){
+  let el=$('#aiSheet');
+  if(!el){el=document.createElement('div');el.id='aiSheet';el.className='hidden';
+    el.innerHTML=`<div class="aih"><b>✨ Trợ lý</b><button id="aiClose" class="lnk">Đóng</button></div><div id="aiMsgs"></div>
+      <div class="aiin"><textarea id="aiIn" rows="1" placeholder="Hỏi hoặc ghi nhanh…"></textarea><button id="aiGo" aria-label="Gửi">➤</button></div>`;
+    document.body.appendChild(el);
+    $('#aiClose').onclick=()=>el.classList.add('hidden');
+    $('#aiGo').onclick=()=>aiSend();
+    $('#aiIn').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();aiSend()}});
+    $('#aiIn').addEventListener('input',e=>{e.target.style.height='auto';e.target.style.height=Math.min(120,e.target.scrollHeight)+'px'});
+    $('#aiMsgs').addEventListener('click',e=>{const b=e.target.closest('[data-ai]');if(!b)return;const [a,j]=b.dataset.ai.split(':');
+      if(a==='q'){$('#aiIn').value=b.textContent;return aiSend()}
+      if(a==='all'){aiPend.forEach((x,i)=>aiSaveOne(i));toast('Đã lưu ✓');render();return aiDraw()}
+      if(a==='one'){aiSaveOne(+j);toast('Đã lưu ✓');render();return aiDraw()}
+      if(a==='edit'){const x=aiPend[+j];if(x.kind==='diary')return openEntry(null,x.r.date);x.done=true;aiDraw();const {k,...pre}=x.r;return openForm(x.kind,null,pre)}
+      if(a==='new'){aiHist=[];aiPend=[];return aiDraw()}});
+    if(KEY)lockWatch(el)}
+  el.classList.remove('hidden');aiDraw();if(q){$('#aiIn').value=q;aiSend()}else setTimeout(()=>$('#aiIn').focus(),80)}
+function lockWatch(el){new MutationObserver(()=>{if($('#app').classList.contains('hidden')){el.classList.add('hidden');aiHist=[];aiPend=[]}}).observe($('#app'),{attributes:true,attributeFilter:['class']})}
+const AI_SUG=['Tháng này anh chi bao nhiêu, nhiều nhất vào đâu?','Ba tháng tới tiền có đủ không?','Ai đang nợ anh, còn bao nhiêu?','Tuần này anh có việc gì?'];
+function aiDraw(){const m=$('#aiMsgs');if(!m)return;
+  let h=aiHist.map(x=>x.role==='user'?`<div class="aim u">${esc(x.content)}</div>`:`<div class="aim a">${x.html||aiMd(x.content)}</div>`).join('');
+  const open=aiPend.filter(x=>!x.done);
+  if(aiPend.length)h+=`<div class="aicards">${aiPend.map((x,j)=>{const [ic,t1,t2]=aiDesc(x);return `<div class="aic${x.done?' done':''}"><i>${ic}</i><div><b>${esc(t1)}</b><small>${esc(t2||'')}</small></div>${x.done?'<span>✓</span>':`<button class="ppx" data-ai="edit:${j}" title="Sửa">✎</button><button class="ppok" data-ai="one:${j}">Lưu</button>`}</div>`}).join('')}
+    ${open.length>1?`<button class="btn" data-ai="all">Lưu cả ${open.length} mục</button>`:''}</div>`;
+  if(aiBusy)h+=`<div class="aim a typing"><span></span><span></span><span></span></div>`;
+  if(!aiHist.length)h=`<div class="aihello"><div class="big">✨</div><b>Anh cần gì?</b><small>Gõ hoặc bấm 🎤 trên bàn phím để nói. Em ghi vào đúng mục, hoặc trả lời từ dữ liệu của anh.</small>
+    <div class="chips wrap">${AI_SUG.map(s=>`<button class="chip" data-ai="q">${s}</button>`).join('')}</div>
+    <div class="note">Mỗi lần hỏi, app gửi kèm bản tóm tắt: ${aiSent()}.</div></div>`;
+  else h+=`<div class="aifoot"><button class="lnk" data-ai="new">＋ Cuộc trò chuyện mới</button></div>`;
+  m.innerHTML=h;m.scrollTop=m.scrollHeight}
+async function aiSend(){
+  const inp=$('#aiIn'),text=inp.value.trim();if(!text||aiBusy)return;
+  inp.value='';inp.style.height='auto';aiPend=aiPend.filter(x=>!x.done).length?aiPend:[];
+  const hist=aiHist.slice(-6).map(x=>({role:x.role,content:x.content}));
+  aiHist.push({role:'user',content:text});aiBusy=true;aiDraw();
+  try{const j=await aiCall({mode:'chat',text,hist,ctx:aiCtx()});
+    const items=(j.items||[]).map(aiRec).filter(Boolean);
+    if(j.action==='create'&&items.length){aiPend=items;aiHist.push({role:'assistant',content:(j.answer||'Em đã soạn sẵn, anh kiểm tra rồi bấm Lưu nhé.')})}
+    else aiHist.push({role:'assistant',content:j.answer||'(không có câu trả lời)'});
+  }catch(e){aiHist.push({role:'assistant',content:'⚠️ '+(e.message||e)})}
+  aiBusy=false;aiDraw()}
+// bản tin buổi sáng (lưu trong dữ liệu đã mã hoá, mỗi ngày một lần)
+const BRIEF='ebrief0001';
+function briefHtml(){if(!S.ai)return '';const b=R[BRIEF],t=today();
+  return `<div class="box aibrief"><div class="bh"><b>☀️ Bản tin sáng</b><button class="lnk" data-act="ai-open">✨ Hỏi trợ lý</button></div>
+    ${b&&b.date===t&&b.text?`<div class="aitext">${aiMd(b.text)}</div>`:`<div class="note" id="briefSt">${S.aiBrief?'Đang soạn bản tin…':'<button class="lnk" data-act="ai-brief">Tạo bản tin hôm nay</button>'}</div>`}</div>`}
+let briefBusy=false;
+async function aiBrief(force){
+  if(!S.ai||briefBusy||!KEY||!syncCode())return;const t=today(),b=R[BRIEF];
+  if(!force&&b&&b.date===t)return;if(!force&&(!S.aiBrief||new Date().getHours()<5||localStorage.getItem('nk_brieftry')===t))return;
+  briefBusy=true;localStorage.setItem('nk_brieftry',t);
+  try{const j=await aiCall({mode:'brief',ctx:aiCtx()});if(j.text){putRec(BRIEF,{k:'brief',date:t,text:j.text});if(view==='home')renderHome()}}
+  catch(e){const s=$('#briefSt');if(s)s.textContent='⚠️ '+(e.message||e)}
+  briefBusy=false}
+
 /* ---------- tiết khí ---------- */
 const tkToday=()=>tkAt(today());
 let tkView=null,tkOpen=null;
@@ -1171,6 +1302,8 @@ $('main').addEventListener('click',e=>{
     if(a==='rem-sel')return openForm('rem',null,{date:selDay});
     if(a==='cal-today'){calM=new Date();calM.setDate(1);selDay=today();return renderCal()}
     if(a==='tk')return openTk();
+    if(a==='ai-open')return aiOpen();
+    if(a==='ai-brief')return aiBrief(true);
     if(a==='wallet-new')return openForm('wallet');
     if(a==='goal-new')return openForm('wallet',null,{type:'goal',name:recs('wallet').some(i=>R[i].type==='goal')?'':'Quỹ dự phòng',pct:'30'});
     if(a==='inc-new')return openForm('inc');
@@ -1246,6 +1379,7 @@ function loadSet(){
   $('#sTkShow').checked=S.tkShow;$('#sTkOn').checked=S.tkOn;$('#sTkTime').value=S.tkTime||'07:00';$('#sTkPre').checked=S.tkPre;renderPushUI();
   renderSyncUI();
   $('#sRem').checked=S.remOn;$('#sRemTime').value=S.remTime||'21:00';
+  $('#sAi').checked=S.ai;$('#sAiBrief').checked=S.aiBrief;$('#sAiDiary').checked=S.aiDiary;$('#aiInfo').textContent=syncCode()?'Đã sẵn sàng (dùng mã đồng bộ để xác thực)':'Cần bật Đồng bộ để dùng trợ lý';
   $('#sQuote').checked=S.quote;$('#sNtf').checked=S.ntf;$('#sEvTime').value=S.evTime||'08:00';$('#sMoon').checked=S.moon;
   [0,1,2].forEach(i=>{const s=$('#sTab'+i);s.innerHTML=TABBABLE.map(m=>`<option value="${m}">${MOD[m].i} ${MOD[m].n}</option>`).join('');s.value=S.tabs[i]});
   $$('[data-home]').forEach(c=>c.checked=!!S.home[c.dataset.home]);
@@ -1260,6 +1394,8 @@ $('#remIcs').onclick=()=>{makeDiaryIcs();toast('Mở file vừa tải để thê
 $('#sNtf').onchange=async e=>{S.ntf=e.target.checked;saveSet();if(S.ntf)await askNtf()};
 $('#sEvTime').onchange=e=>{S.evTime=e.target.value||'08:00';saveSet()};
 $('#sMoon').onchange=e=>{S.moon=e.target.checked;saveSet()};
+$('#sAi').onchange=e=>{S.ai=e.target.checked;saveSet()};$('#sAiBrief').onchange=e=>{S.aiBrief=e.target.checked;saveSet()};$('#sAiDiary').onchange=e=>{S.aiDiary=e.target.checked;saveSet()};
+$('#aiOpenBtn').onclick=()=>aiOpen();
 $('#allIcs').onclick=makeAllIcs;
 [0,1,2].forEach(i=>$('#sTab'+i).onchange=e=>{const v=e.target.value,j=S.tabs.indexOf(v);if(j>=0&&j!==i)S.tabs[j]=S.tabs[i];S.tabs[i]=v;saveSet();loadSet();drawNav()});
 $$('[data-home]').forEach(c=>c.onchange=()=>{S.home[c.dataset.home]=c.checked?1:0;saveSet()});

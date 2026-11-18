@@ -339,6 +339,30 @@ nav button.on i{filter:none;opacity:1}
 .tkrow .more .btn{margin-top:4px;padding:8px;font-size:.85em}
 #toast{position:fixed;left:50%;bottom:120px;transform:translateX(-50%);background:#333;color:#fff;padding:8px 16px;border-radius:20px;font-size:.88em;z-index:80;opacity:0;transition:.3s;pointer-events:none;max-width:90%;text-align:center}
 #toast.on{opacity:1}
+#aiSheet{position:fixed;inset:0;z-index:28;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
+.aih{display:flex;justify-content:space-between;align-items:center;padding:14px 16px 8px;border-bottom:1px solid var(--line)}.aih b{font-size:1.1em}
+#aiMsgs{flex:1;overflow-y:auto;padding:14px 16px;-webkit-overflow-scrolling:touch}
+.aim{max-width:88%;padding:9px 13px;border-radius:16px;margin-bottom:10px;line-height:1.45;font-size:.95em;overflow-wrap:anywhere}
+.aim.u{margin-left:auto;background:var(--acc);color:#fff;border-bottom-right-radius:5px;white-space:pre-wrap}
+.aim.a{background:var(--card);border:1px solid var(--line);border-bottom-left-radius:5px}
+.aim p{margin:0 0 6px}.aim p:last-child{margin:0}.aim ul,.aitext ul{margin:4px 0;padding-left:18px}.aim li,.aitext li{margin:2px 0}
+.aitext p{margin:0 0 4px}
+.typing span{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--mute);margin:0 2px;animation:blink 1s infinite}
+.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,100%{opacity:.25}50%{opacity:1}}
+.aicards{margin:0 0 12px}.aicards .btn{margin-top:4px}
+.aic{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:9px 10px;margin-bottom:8px}
+.aic>i{font-style:normal;font-size:20px;width:30px;text-align:center;flex:none}.aic>div{flex:1;min-width:0}.aic b{display:block;font-weight:600;font-size:.94em}.aic small{display:block;color:var(--mute);font-size:.8em}
+.aic.done{opacity:.55}.aic.done span{color:var(--grn);font-weight:700;padding:0 6px}
+.aiin{display:flex;gap:8px;align-items:flex-end;padding:10px 12px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--card)}
+.aiin textarea{flex:1;resize:none;border:1px solid var(--line);border-radius:18px;padding:10px 14px;background:var(--bg);color:var(--ink);font:inherit;max-height:120px}
+.aiin button{flex:none;width:42px;height:42px;border-radius:50%;border:0;background:var(--acc);color:#fff;font-size:18px}
+.aihello{text-align:center;color:var(--mute);padding:30px 6px}.aihello .big{font-size:44px}.aihello b{display:block;color:var(--ink);font-size:1.15em;margin:6px 0}.aihello>small{display:block;margin-bottom:14px}
+.aihello .chips{justify-content:center}.aihello .chip{color:var(--ink)}.aihello .note{margin-top:16px}
+.aifoot{text-align:center;padding:4px 0 10px}
+.aiask{display:flex;align-items:center;gap:10px;width:100%;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:12px 16px;margin-bottom:12px;color:var(--mute);text-align:left;font-size:.95em}
+.aiask span{font-size:18px}.aiask small{display:block;margin-left:auto;font-size:.75em;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aibrief .aitext{font-size:.92em;line-height:1.5}
 #nudge{position:fixed;inset:0;z-index:90;background:#0007;display:none;align-items:center;justify-content:center;padding:24px}
 #nudge.on{display:flex}
 #nudge .nbox{background:var(--card);color:var(--ink);border-radius:24px;padding:26px 22px 18px;text-align:center;max-width:320px;width:100%;box-shadow:0 10px 40px #0004}
@@ -448,6 +472,14 @@ nav button.on i{filter:none;opacity:1}
         <input id="newPw" type="password" placeholder="Mật khẩu mới (từ 8 ký tự)" style="margin-bottom:8px">
         <button class="btn" id="chgPw">Cập nhật mật khẩu</button>
         <div class="err" id="pwMsg"></div>
+      </div>
+      <div class="sec">
+        <h3>✨ Trợ lý AI</h3>
+        <div class="row"><div>Bật trợ lý<small id="aiInfo"></small></div><input type="checkbox" class="sw" id="sAi"></div>
+        <div class="row"><div>Bản tin buổi sáng<small>Tự soạn 1 lần mỗi ngày ở trang Hôm nay</small></div><input type="checkbox" class="sw" id="sAiBrief"></div>
+        <div class="row"><div>Cho trợ lý đọc nhật ký<small>10 bài gần nhất, mỗi bài 300 ký tự đầu</small></div><input type="checkbox" class="sw" id="sAiDiary"></div>
+        <button class="btn ghost" id="aiOpenBtn">✨ Mở trợ lý</button>
+        <div class="note">Trợ lý dùng Claude (Anthropic) qua máy chủ riêng của anh. Mỗi lần hỏi, app gửi kèm bản tóm tắt dữ liệu cần thiết (tài chính, việc, lịch, người thân, ngày giỗ, thói quen); Kho cá nhân không bao giờ được gửi, nhật ký chỉ gửi khi bật ở trên. Anthropic không dùng dữ liệu gửi qua API để huấn luyện.</div>
       </div>
       <div class="sec" id="syncSec">
         <div class="row"><div>☁️ Đồng bộ nhiều thiết bị<small id="syncInfo">Đang tắt</small></div></div>
