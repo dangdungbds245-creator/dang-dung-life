@@ -1,6 +1,6 @@
 // Đăng Dũng Life — © 2026 Đăng Dũng
 // Mở app tức thì từ bộ nhớ máy, tải bản mới ngầm phía sau (stale-while-revalidate)
-const C='ddlife-v8',SHELL=['index.html','app.js','data.js'],F=['./',...SHELL,'manifest.webmanifest','icon-180.png','icon-192.png','icon-512.png'];
+const C='ddlife-v9',SHELL=['index.html','app.js','data.js'],F=['./',...SHELL,'manifest.webmanifest','icon-180.png','icon-192.png','icon-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(F)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 let notified=false,upd=false;
