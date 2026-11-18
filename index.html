@@ -396,13 +396,20 @@ nav button.on i{filter:none;opacity:1}
       </div>
       <div class="sec" id="syncSec">
         <div class="row"><div>☁️ Đồng bộ nhiều thiết bị<small id="syncInfo">Đang tắt</small></div></div>
-        <div id="syncOff"><button class="btn" id="syncOn">Bật đồng bộ</button></div>
+        <div id="syncOff"><button class="btn" id="syncOn">Bật đồng bộ (tạo mã mới)</button>
+          <button class="btn ghost" id="slBtn" style="margin-top:10px">🔗 Nhập mã đồng bộ từ máy khác</button>
+          <div id="slBox" class="hidden" style="margin-top:10px">
+            <input id="slCode" placeholder="Mã đồng bộ (XXXXX-XXXXX-XXXXX-XXXXX)" autocapitalize="characters" autocomplete="off">
+            <input id="slPwL" type="password" placeholder="Mật khẩu của mã đồng bộ" autocomplete="off">
+            <button class="btn" id="slGo">Kết nối & chuyển dữ liệu</button>
+            <div class="err" id="slErr"></div>
+          </div></div>
         <div id="syncOnBox" class="hidden">
           <div class="row"><div>Mã đồng bộ<small class="codebox" id="syncCodeTxt">•••••-•••••-•••••-•••••</small></div><button class="chip" id="syncShow">Hiện</button></div>
           <button class="btn ghost" id="syncNow">🔄 Đồng bộ ngay</button>
           <button class="btn danger" id="syncOffBtn">Tắt đồng bộ</button>
         </div>
-        <div class="note">Mọi dữ liệu được mã hoá ngay trên máy trước khi gửi đi, máy chủ không đọc được. Trên thiết bị khác: chọn “Nhập mã đồng bộ” ở màn hình đầu tiên, nhập mã này cùng mật khẩu. Khi đang bật đồng bộ thì không đổi được mật khẩu.</div>
+        <div class="note">Mọi dữ liệu được mã hoá ngay trên máy trước khi gửi đi, máy chủ không đọc được. Trên thiết bị khác: chọn “Nhập mã đồng bộ” ở màn hình đầu tiên (hoặc trong Cài đặt › Đồng bộ), nhập mã này cùng mật khẩu. Khi đang bật đồng bộ thì không đổi được mật khẩu.</div>
       </div>
       <div class="sec">
         <div class="row"><div>Sao lưu dữ liệu<small>File .json KHÔNG mã hoá — hãy cất kỹ</small></div></div>

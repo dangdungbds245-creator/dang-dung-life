@@ -150,7 +150,7 @@ function lockUI(){
   $('#lkBtn').textContent=first?'Tạo & vào':'Mở khoá';
   $('#pw1').value=$('#pw2').value='';$('#lkErr').textContent='';
   $('#bioBtn').classList.toggle('hidden',first||!bioOn());
-  $('#linkBtn').classList.remove('hidden');$('#linkBox').classList.add('hidden')}
+  $('#linkBtn').classList.toggle('hidden',!first);$('#linkBox').classList.add('hidden')}
 const bioOn=()=>!!(window.PublicKeyCredential&&canCrypto&&localStorage.getItem('nk_bio'));
 async function submitLock(){
   const p=$('#pw1').value,err=$('#lkErr');
@@ -668,8 +668,8 @@ async function sync(){
   finally{syncing=false}}
 setInterval(()=>{if(KEY&&!document.hidden)sync()},120000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&KEY)sync()});
-async function linkDevice(){
-  const err=$('#lkErr'),code=normCode($('#lkCode').value),p=$('#lkPwL').value;err.textContent='';
+async function linkDevice(inApp){
+  const pf=inApp?'#sl':'#lk',err=$(inApp?'#slErr':'#lkErr'),code=normCode($(pf+'Code').value),p=$(pf+'PwL').value;err.textContent='';
   if(code.length!==23)return err.textContent='Mã đồng bộ gồm 20 ký tự (4 nhóm 5 ký tự)';
   if(!p)return err.textContent='Nhập mật khẩu';
   try{
@@ -684,7 +684,7 @@ async function linkDevice(){
       for(const k of ['nk_data','nk_pw','nk_salt','nk_lastw','nk_lastsync','nk_bio','nk_sync','nk_remd','nk_ntf'])localStorage.removeItem(k);
       await pClear().catch(()=>{});await kDel('key').catch(()=>{})}
     localStorage.setItem(K.salt,g.j.salt);localStorage.setItem(K.pw,await hash(p,g.j.salt));localStorage.setItem('nk_sync',code);
-    err.textContent='Đang tải dữ liệu…';await unlock(key);
+    err.textContent='Đang tải dữ liệu…';if(inApp){lock();toast('Đã nối đồng bộ, đang tải dữ liệu…')}await unlock(key);
   }catch(e){err.textContent='Không kết nối được: '+(e.message||e)}}
 
 /* ---------- tiết khí ---------- */
@@ -1011,7 +1011,9 @@ $('#sBio').onchange=async e=>{
   }catch(err){e.target.checked=!!localStorage.getItem('nk_bio');toast('Không bật được')}};
 $('#bioBtn').onclick=bioUnlock;
 $('#linkBtn').onclick=()=>{$('#linkBox').classList.toggle('hidden');$('#lkCode').focus()};
-$('#linkGo').onclick=linkDevice;
+$('#linkGo').onclick=()=>linkDevice(false);
+$('#slBtn').onclick=()=>{$('#slBox').classList.toggle('hidden');$('#slCode').focus()};
+$('#slGo').onclick=()=>linkDevice(true);
 $('#syncOn').onclick=async()=>{const c=genCode();localStorage.setItem('nk_sync',c);codeShown=true;renderSyncUI();
   alert('Mã đồng bộ của anh:\n\n'+c+'\n\nHãy chép lại ở nơi an toàn. Trên thiết bị khác, nhập mã này cùng mật khẩu.');await sync()};
 $('#syncShow').onclick=()=>{codeShown=!codeShown;renderSyncUI()};
